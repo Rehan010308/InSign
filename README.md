@@ -20,10 +20,18 @@ recognition runs locally in the page.
 ## Quickstart
 
 ```bash
-npm install
+npm install                    # also fetches the MediaPipe vision assets
 cp .env.example .env.local     # optional — see "Supabase" below
 npm run dev                    # http://localhost:5173
 ```
+
+The ~37MB of MediaPipe binaries (the wasm runtime and the hand-landmarker model)
+are **not** in the repository. `npm install` puts them in `public/` via
+`npm run assets`: the wasm is copied out of `node_modules`, and the model is
+downloaded from Google's official storage. If that download fails — offline, say
+— the install still succeeds and the sign translator loads the model from the
+official CDN instead, saying so in the UI. Re-run `npm run assets` once you are
+online to get the local copy back.
 
 Without Supabase credentials the app runs in **local demo mode**: accounts and
 sessions live in that browser's localStorage, and every screen says so. The
@@ -58,6 +66,7 @@ landing page and both products work either way.
 | `npm run test:e2e` | Playwright — five viewports, both themes |
 | `npm test` | Both suites |
 | `npm run check:secrets` | Scans `src/` and `dist/` for service-role keys |
+| `npm run assets` | Puts the MediaPipe wasm + model in `public/` (runs on install) |
 | `npm run static` | Serves the original zero-dependency `site/` for reference |
 
 ## Permissions the app asks for, and why

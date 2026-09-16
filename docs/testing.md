@@ -9,6 +9,10 @@ npm run test:e2e      # playwright test  (starts the dev server itself)
 npm test              # both
 ```
 
+The sign specs need the MediaPipe assets in `public/`. `npm install` fetches
+them; run `npm run assets` if you cleaned them out. Without them the app still
+works (it falls back to the CDN) but the suite then depends on the network.
+
 ## Unit tests — `tests/unit/`
 
 71 tests over the modules that have no DOM in them at all.

@@ -92,7 +92,8 @@ gives up with a clear message after five consecutive failures.
  camera (getUserMedia, on request only)
         │
         ▼
- MediaPipe HandLandmarker  ── GPU delegate, CPU fallback, local model + wasm
+ MediaPipe HandLandmarker  ── GPU delegate, CPU fallback,
+        │                             local model + wasm, CDN as the last resort
         │  21 landmarks per hand, image space
         ▼
  LandmarkSmoother (21 × 3 Kalman1D)  ── keeps BOTH raw and stabilized
@@ -120,6 +121,12 @@ Performance rules the loop follows:
   when the tracking chip, the candidate list or the output actually changes
 - the loop stops on `visibilitychange` and on unmount, and the camera tracks are
   stopped with it (asserted in `tests/e2e/sign.spec.ts`)
+
+The model and the wasm runtime live in `public/` but are not committed — they are
+~37MB of binaries that `scripts/fetch-vision-assets.mjs` reproduces on install.
+`useHandLandmarker` tries local assets first and the official CDN second, and the
+UI shows a "MODEL LOADED FROM CDN" badge when the fallback was used, so the
+difference is never hidden.
 
 ## Data layer
 

@@ -23,3 +23,9 @@ tests/screenshots/
 !.vscode/extensions.json
 *.log
 .freebuff/
+
+# MediaPipe vision assets (~37MB) — fetched by scripts/fetch-vision-assets.mjs
+# on npm install, or with `npm run assets`. The runtime falls back to the
+# official CDN when they are missing.
+public/mediapipe/
+public/models/
