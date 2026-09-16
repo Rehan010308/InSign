@@ -22,9 +22,29 @@ test.describe('landing page', () => {
 
   test('nav anchors scroll the target below the sticky bar', async ({ page }) => {
     await page.goto('/');
+    // The header links are hidden on narrow viewports by design; the footer nav
+    // carries the same anchors there, so the behaviour is tested either way.
+    const headerVisible = await page.locator('#nav').getByRole('link', { name: 'SPEECH', exact: true })
+      .isVisible().catch(() => false);
+    const source = headerVisible ? page.locator('#nav') : page.locator('footer');
+
     for (const label of ['SPEECH', 'SIGN', 'PHILOSOPHY']) {
-      await page.locator('#nav').getByRole('link', { name: label, exact: true }).click();
-      await page.waitForTimeout(800);
+      await source.getByRole('link', { name: label, exact: true }).click();
+      // Smooth scrolling takes as long as the distance demands, which on a
+      // phone-height page is well over a second. Reset the sampler each time,
+      // or the previous anchor's settled state satisfies this immediately.
+      await page.evaluate(() => {
+        const w = window as unknown as { __lastY?: number; __still?: number };
+        w.__lastY = -1;
+        w.__still = 0;
+      });
+      await page.waitForFunction(() => {
+        const w = window as unknown as { __lastY?: number; __still?: number };
+        const y = Math.round(window.scrollY);
+        if (w.__lastY === y) { w.__still = (w.__still ?? 0) + 1; } else { w.__still = 0; }
+        w.__lastY = y;
+        return (w.__still ?? 0) > 3;
+      }, null, { timeout: 10_000, polling: 100 });
       const id = label.toLowerCase();
       const top = await page.locator(`#${id}`).evaluate(el => el.getBoundingClientRect().top);
       expect(top, `${label} should land below the 84px nav`).toBeGreaterThanOrEqual(-2);

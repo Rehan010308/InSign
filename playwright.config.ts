@@ -19,8 +19,10 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : 4,
+  // The sign suite runs MediaPipe with a GPU delegate in every worker; more than
+  // two at once starves them and the camera tests time out on slower machines.
+  retries: 1,
+  workers: 2,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   timeout: 45_000,
   expect: { timeout: 8_000 },

@@ -67,6 +67,8 @@ export function useSignPipeline(threshold: number, light: boolean): SignPipeline
   const thresholdRef = useRef(threshold);
   const lightRef = useRef(light);
   const busyRef = useRef(false);
+  /** set only by the test hook: keeps the live loop off while frames are injected */
+  const suspendedRef = useRef(false);
 
   const [running, setRunning] = useState(false);
   const [chip, setChip] = useState<TrackingChip>({ tone: 'idle', text: 'CAMERA OFF' });
@@ -190,7 +192,7 @@ export function useSignPipeline(threshold: number, light: boolean): SignPipeline
   }, [camera.videoRef, landmarker, processFrame, setChipIfChanged]);
 
   const startLoop = useCallback(() => {
-    if (runningRef.current) return;
+    if (runningRef.current || suspendedRef.current) return;
     runningRef.current = true;
     setRunning(true);
     sessionStart.current = performance.now();
@@ -234,7 +236,7 @@ export function useSignPipeline(threshold: number, light: boolean): SignPipeline
       if (document.hidden) {
         runningRef.current = false;
         cancelAnimationFrame(rafRef.current);
-      } else if (camera.videoRef.current?.srcObject) {
+      } else if (camera.videoRef.current?.srcObject && !suspendedRef.current) {
         runningRef.current = true;
         rafRef.current = requestAnimationFrame(loop);
       }
@@ -252,22 +254,39 @@ export function useSignPipeline(threshold: number, light: boolean): SignPipeline
   /* --- test hook -----------------------------------------------------------
      Playwright cannot make a fake webcam form a sign, so the suite feeds
      recorded landmark frames through the real pipeline instead. This only
-     injects INPUT — every stage after it is the production code path. */
+     injects INPUT — Kalman, the temporal window, the classifier, the confidence
+     gate and the context engine are all the production code path. */
   useEffect(() => {
     const api = {
-      feedFrames(frames: LandmarkFrame[], handCount = 1) {
+      /** Stops reading the camera so injected frames are not fighting live ones. */
+      pauseLive() {
+        suspendedRef.current = true;
+        runningRef.current = false;
+        cancelAnimationFrame(rafRef.current);
+      },
+      resumeLive() {
+        suspendedRef.current = false;
+        if (runningRef.current || !camera.videoRef.current?.srcObject) return;
+        runningRef.current = true;
+        rafRef.current = requestAnimationFrame(loop);
+      },
+      async feedFrames(frames: LandmarkFrame[], handCount = 1) {
         if (!sessionStart.current) sessionStart.current = performance.now();
         const base = performance.now();
-        frames.forEach((f, i) => processFrame(f, handCount, base + i * FRAME_INTERVAL));
+        for (let i = 0; i < frames.length; i++) {
+          processFrame(frames[i], handCount, base + i * FRAME_INTERVAL);
+          // Let the async classification settle before the next frame, so the
+          // hold-to-confirm and debounce logic runs exactly as it would live.
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       },
       feedNoHand() {
         processFrame(null, 0, performance.now());
       },
-      get tokenCount() { return tokens.length; },
     };
     (window as unknown as Record<string, unknown>).__insignSignPipeline = api;
     return () => { delete (window as unknown as Record<string, unknown>).__insignSignPipeline; };
-  }, [processFrame, tokens.length]);
+  }, [processFrame, camera.videoRef, loop]);
 
   return {
     videoRef: camera.videoRef,

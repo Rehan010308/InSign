@@ -9,6 +9,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23E8A33D'/%3E%3Cpath d='M4 16h6l3-8 6 16 3-8h6' stroke='%230A0A0B' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  /* Critical: paint the page ground before the stylesheet arrives, otherwise
+     the body's theme transition fades in from white on every load. These two
+     values mirror --bg in src/styles/style.css. */
+  html { background: #0A0A0B; }
+  html[data-theme="light"] { background: #F3EFE6; }
+</style>
 <script>
   /* set theme before paint to avoid flash */
   try {

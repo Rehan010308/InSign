@@ -54,7 +54,7 @@ export default function Settings() {
         <p className="app-hint">Signed in as {user?.email}. {mode === 'local' ? 'Local demo mode — these preferences live in this browser.' : ''}</p>
       </header>
 
-      {saved && <p className="form-notice" role="status">Saved.</p>}
+      {saved && <p className="form-notice" role="status" data-testid="saved-notice">Saved.</p>}
 
       <div className="panel">
         <div className="panel-head"><h3>Display name</h3></div>

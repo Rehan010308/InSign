@@ -133,22 +133,22 @@ export default function Landing() {
                 <div className="sflow-mid">
                   <div className="patterns" id="story-patterns">
                     <div className="pattern p-pace">
-                      <h5>PACE</h5>
+                      <p className="lbl">PACE</p>
                       <svg viewBox="0 0 72 16" aria-hidden="true"><path className="b b2" d="M2 12 C 12 12, 16 4, 26 4 S 44 13, 54 13 S 68 8, 70 8"/><path className="b" d="M2 12 C 12 12, 16 4, 26 4 S 44 13, 54 13 S 68 8, 70 8" opacity="0"/></svg>
                       <p>words per minute</p>
                     </div>
                     <div className="pattern p-pauses">
-                      <h5>PAUSES</h5>
+                      <p className="lbl">PAUSES</p>
                       <svg viewBox="0 0 72 16" aria-hidden="true"><path className="b" d="M2 8 H 68"/><path className="g" d="M20 3 v 10"/><path className="g" d="M46 3 v 10"/></svg>
                       <p>where they happen</p>
                     </div>
                     <div className="pattern p-reps">
-                      <h5>REPETITIONS</h5>
+                      <p className="lbl">REPETITIONS</p>
                       <svg viewBox="0 0 72 16" aria-hidden="true"><path className="b" d="M2 11 C 10 11, 12 4, 20 4 C 28 4, 24 13, 32 13 S 46 8, 68 8"/><path className="h" d="M14 10 c -3 -6 6 -8 6 -3 s -7 5 -6 3"/><path className="h" d="M40 10 c -3 -6 6 -8 6 -3 s -7 5 -6 3"/></svg>
                       <p>sounds revisited</p>
                     </div>
                     <div className="pattern p-fillers">
-                      <h5>FILLERS</h5>
+                      <p className="lbl">FILLERS</p>
                       <svg viewBox="0 0 72 16" aria-hidden="true"><path className="b" d="M2 8 H 68"/><circle className="h" cx="24" cy="8" r="2.4"/><circle className="h" cx="44" cy="8" r="2.4"/></svg>
                       <p>patterns of hesitation</p>
                     </div>
@@ -206,25 +206,25 @@ export default function Landing() {
             <div className="sessions" id="sessions">
               <div className="sess">
                 <p className="num">SESSION 01</p>
-                <h4>Interview</h4>
+                <h3>Interview</h3>
                 <p>First attempt. Long pauses before key points.</p>
                 <span className="tag">OBSERVING</span>
               </div>
               <div className="sess">
                 <p className="num">SESSION 02</p>
-                <h4>Interview</h4>
+                <h3>Interview</h3>
                 <p>Pauses land in the same places. A pattern emerges.</p>
                 <span className="tag">RECOGNIZING</span>
               </div>
               <div className="sess">
                 <p className="num">SESSION 03</p>
-                <h4>Conversation</h4>
+                <h3>Conversation</h3>
                 <p>Relaxed setting. Pace steadies on its own.</p>
                 <span className="tag">COMPARING</span>
               </div>
               <div className="sess">
                 <p className="num">SESSION 04</p>
-                <h4>Presentation</h4>
+                <h3>Presentation</h3>
                 <p>Longer format. Repetitions fade under pressure.</p>
                 <span className="tag">CONFIRMING</span>
               </div>
@@ -306,27 +306,27 @@ export default function Landing() {
               <div className="pipe rv" data-pipe>
                 <p className="pipe-title"><b>SPEECH</b> · FROM VOICE TO PRACTICE</p>
                 <div className="pipe-flow" id="pipe-speech">
-                  <div className="pipe-node"><h5>MIC</h5><p>your voice</p></div>
+                  <div className="pipe-node"><p className="lbl">MIC</p><p>your voice</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>SPEECH ANALYSIS</h5><p>pace · pauses</p></div>
+                  <div className="pipe-node"><p className="lbl">SPEECH ANALYSIS</p><p>pace · pauses</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>PATTERN</h5><p>your signature</p></div>
+                  <div className="pipe-node"><p className="lbl">PATTERN</p><p>your signature</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>PERSONALIZATION</h5><p>next practice</p></div>
+                  <div className="pipe-node"><p className="lbl">PERSONALIZATION</p><p>next practice</p></div>
                 </div>
               </div>
               <div className="pipe rv rv-d1" data-pipe>
                 <p className="pipe-title"><b>SIGN</b> · FROM HAND TO TEXT</p>
                 <div className="pipe-flow five" id="pipe-sign">
-                  <div className="pipe-node"><h5>CAMERA</h5><p>the scene</p></div>
+                  <div className="pipe-node"><p className="lbl">CAMERA</p><p>the scene</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>LANDMARKS</h5><p>21 points</p></div>
+                  <div className="pipe-node"><p className="lbl">LANDMARKS</p><p>21 points</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>STABILIZATION</h5><p>tremor absorbed</p></div>
+                  <div className="pipe-node"><p className="lbl">STABILIZATION</p><p>tremor absorbed</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>RECOGNITION</h5><p>over time</p></div>
+                  <div className="pipe-node"><p className="lbl">RECOGNITION</p><p>over time</p></div>
                   <div className="pipe-seg" aria-hidden="true"><i></i></div>
-                  <div className="pipe-node"><h5>SIGN</h5><p>as text</p></div>
+                  <div className="pipe-node"><p className="lbl">SIGN</p><p>as text</p></div>
                 </div>
               </div>
             </div>

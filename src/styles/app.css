@@ -289,7 +289,10 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
     border: 1px solid var(--hairline); border-radius: var(--r-lg); display: none;
   }
   .app-links.open { display: flex; }
-  .app-links .app-link { display: block; padding: 12px 10px; }
+  /* The landing stylesheet hides bare nav links below 820px
+     (.nav-links a:not(.btn)); the app's collapsed menu is made of exactly such
+     links, so this has to out-specify that rule or the menu opens empty. */
+  .app-nav .app-links .app-link { display: block; padding: 12px 10px; }
   .app-nav .bar { position: relative; }
   .app-links .btn { margin-left: 0; }
   .session-row { grid-template-columns: 1fr; gap: 10px; }

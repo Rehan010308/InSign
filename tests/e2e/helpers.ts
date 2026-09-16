@@ -79,6 +79,15 @@ export async function seedSpeechSessions(
   }, rows);
 }
 
+/**
+ * The app nav collapses behind a MENU button at narrow viewports; open it so a
+ * test can reach the same links it uses on a desktop viewport.
+ */
+export async function openAppMenu(page: Page) {
+  const toggle = page.getByRole('button', { name: 'MENU' });
+  if (await toggle.isVisible().catch(() => false)) await toggle.click();
+}
+
 export async function shot(page: Page, info: TestInfo, name: string) {
   await page.screenshot({
     path: `tests/screenshots/${info.project.name}/${name}.png`,
