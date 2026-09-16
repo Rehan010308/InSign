@@ -1,6 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { Link } from 'react-router-dom';
-import ThemeToggle from '../components/ThemeToggle';
-export default function NotFound() {
-    return (_jsxs(_Fragment, { children: [_jsx("header", { id: "nav", className: "app-nav scrolled", children: _jsxs("div", { className: "wrap bar", children: [_jsxs(Link, { className: "brand", to: "/", children: [_jsx("span", { className: "mark", "aria-hidden": "true" }), "InSign"] }), _jsx("nav", { className: "nav-links", "aria-label": "Primary", children: _jsx(ThemeToggle, {}) })] }) }), _jsx("main", { id: "main", className: "page app-page", children: _jsxs("div", { className: "wrap-narrow", children: [_jsx("p", { className: "overline", children: "404" }), _jsxs("h1", { className: "statement-sm", children: ["That page isn't ", _jsx("em", { className: "serif", children: "here" }), "."] }), _jsx("p", { className: "app-hint", children: "It may have moved, or never existed." }), _jsxs("div", { className: "row", style: { marginTop: 28 }, children: [_jsxs(Link, { className: "btn btn-primary", to: "/", children: ["Back to the story ", _jsx("span", { className: "arrow", children: "\u2192" })] }), _jsx(Link, { className: "btn btn-secondary", to: "/dashboard", children: "Open the app" })] })] }) })] }));
-}

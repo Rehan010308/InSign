@@ -1,6 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { Link } from 'react-router-dom';
-import ThemeToggle from './ThemeToggle';
-export default function AuthLayout({ overline, title, accent, lede, children, footer, }) {
-    return (_jsxs(_Fragment, { children: [_jsx("a", { className: "skip", href: "#main", children: "Skip to content" }), _jsx("header", { id: "nav", className: "app-nav scrolled", children: _jsxs("div", { className: "wrap bar", children: [_jsxs(Link, { className: "brand", to: "/", children: [_jsx("span", { className: "mark", "aria-hidden": "true" }), "InSign"] }), _jsxs("nav", { className: "nav-links", "aria-label": "Primary", children: [_jsx(ThemeToggle, {}), _jsx(Link, { className: "btn btn-secondary btn-sm", to: "/", children: "Back to the story" })] })] }) }), _jsx("main", { id: "main", className: "page app-page auth-page", children: _jsxs("div", { className: "auth-card", children: [_jsx("p", { className: "overline", children: overline }), _jsxs("h1", { className: "statement-sm", children: [title, " ", _jsx("em", { className: "serif", children: accent })] }), _jsx("p", { className: "lede auth-lede", children: lede }), children, _jsx("div", { className: "auth-footer", children: footer })] }) })] }));
-}
