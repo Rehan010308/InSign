@@ -330,9 +330,6 @@ export default function Landing() {
                 </div>
               </div>
             </div>
-            <div className="pipe-foot">
-              <span className="badge badge-demo">PLACEHOLDER PIPELINES · REAL PROCESSING ARRIVES WITH THE BUILD</span>
-            </div>
           </div>
         </section>
         <section id="philosophy" className="chapter" aria-labelledby="phil-h">
@@ -366,7 +363,6 @@ export default function Landing() {
             </div>
             <div className="contact-meta rv rv-d3">
               <span className="micro">USUALLY REPLIES WITHIN A DAY</span>
-              <span className="badge badge-demo">24H HACKATHON PROTOTYPE</span>
             </div>
           </div>
         </section>

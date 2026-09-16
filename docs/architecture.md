@@ -24,13 +24,15 @@ src/
                               SpeechHistory, SpeechSessionDetail, SignTranslate, Settings, NotFound
 
   features/
-    speech/                   ScenarioPicker, LiveTranscript, MetricTiles
+    speech/                   ScenarioPicker, PracticePrompt, ListeningStage,
+                              SessionResults, LiveTranscript, VoiceBars, PracticeTimer
     sign/                     useSignPipeline (the rAF loop), LandmarkOverlay (canvas drawing)
 
   lib/
     landing/                  signalBackground.ts, landingInteractions.ts — the original
                               canvas/scroll sequencers, each returning a cleanup function
-    speech/                   useSpeechRecognition.ts, metrics.ts
+    speech/                   useSpeechRecognition.ts, metrics.ts, questionBank.ts,
+                              coach.ts, useMicLevel.ts
     sign/                     useCamera.ts, useHandLandmarker.ts, kalman.ts, normalizer.ts,
                               featureWindow.ts, classifier.ts, classifierTemplates.ts, handModel.ts
 
@@ -53,38 +55,46 @@ unchanged; the lifetime is not.
 
 ```
  microphone ──► Web Speech API ──► transcript (final + interim)
-                     │                    │
-                     │                    ├──► metrics.ts   (pure, local)
-                     │                    │      wordsPerMinute · countPauses
-                     │                    │      countRepetitions · countFillers
-                     │                    │
-                     └── state machine ───┘
-                         idle → requesting_permission → listening → stopped | error
-                                              │
-                                              ▼
-                              sessionService.saveSpeechSession
-                                              │
-                                              ▼
-                              personalizationEngine.detectPattern(history)
-                                              │
-                            pattern + confidence + recommendation (or an honest refusal)
-                                              │
-                                    speech_patterns · practice_recommendations
-                                              │
-                                              ▼
-                                  dashboard "NEXT PRACTICE"
+                                        │
+        question bank ──► prompt         ▼
+        (deterministic,            metrics.ts (pure)
+         scenario-specific)     pace · pauses · repetitions · fillers
+                │                       │
+                ▼                       ▼
+        coach.ts (pure) ◄──── scenario history (speech_sessions)
+        profile · target · drill · comparison
+                │
+                ▼
+         sessionService.saveSpeechSession
+                │
+                ▼
+     speech_sessions · speech_patterns · practice_recommendations
 ```
 
-Two things are deliberate here. First, every number on screen is computed by
-`metrics.ts` from the text and the timing of the recognition events — there is
-no scoring model anywhere. Second, when the browser has no speech recognition,
-the *only* thing that changes is where the transcript comes from: the typed path
-feeds the same metric functions, with pauses taken from marks the writer types
-because typed text has no audio timing.
+Three things are worth stating plainly.
 
-The recognition hook restarts the API's spurious `end` events for as long as the
-user intends to keep listening, shows a "reconnected" chip when it does, and
-gives up with a clear message after five consecutive failures.
+**The session is one wall clock.** Duration is measured once, from Start to
+Stop, and pace is words over that duration. Nothing a recognition restart does
+can touch it. The previous approach derived "speaking time" by subtracting the
+gaps between recognition results from the session; those gaps contain each
+phrase's own speech, so the remainder collapsed towards zero and a normal
+sentence could be reported at tens of thousands of words a minute. Utterance
+spans are still measured, but only to tell silence between phrases from speech
+— never to divide into words.
+
+**Everything after the transcript is local and deterministic.** Pace, pauses,
+repetitions, fillers, the question that comes next, the target, the drill and
+the comparison are all pure functions of the transcript, its timing, and the
+sessions the user actually saved. There is no model and no network call in any
+of it, and no paid AI service anywhere in the deployed app. Given the same
+history, the same answer comes back — which is what makes it unit-testable and
+what makes a recommendation defensible.
+
+**Personalization is per scenario and refuses to guess.** Interview history
+shapes interview practice and nothing else. Below three sessions in a scenario
+the coach says it is still building a baseline rather than claiming a pattern,
+and no target is ever phrased as advice — it is a number the next attempt is
+measured against.
 
 ## Sign pipeline
 

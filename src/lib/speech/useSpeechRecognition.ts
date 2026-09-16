@@ -46,6 +46,12 @@ export interface RecognitionError {
   recoverable: boolean;
 }
 
+/** Everything a finished session needs, captured at the moment Stop settled. */
+export interface FinalisedSession {
+  finalTranscript: string;
+  events: SpeechEvent[];
+}
+
 export interface UseSpeechRecognition {
   state: RecognitionState;
   supported: boolean;
@@ -58,11 +64,19 @@ export interface UseSpeechRecognition {
   /** true when nothing has been heard for a while */
   silent: boolean;
   start: () => void;
-  stop: () => void;
+  /**
+   * Stops listening and resolves once the API has finished delivering results.
+   * Chrome can emit one last final result *after* `stop()`; resolving on `end`
+   * (with a short cap) is what keeps that last sentence in the session instead
+   * of dropping it on the floor.
+   */
+  stop: () => Promise<FinalisedSession>;
   reset: () => void;
 }
 
 const SILENCE_PROMPT_MS = 15000;
+/** How long to wait for the API's trailing results after Stop before giving up. */
+const FINALISE_GRACE_MS = 1200;
 
 function describe(code: string): RecognitionError {
   switch (code) {
@@ -71,19 +85,19 @@ function describe(code: string): RecognitionError {
       return {
         code,
         message:
-          'Microphone access is blocked. Open the padlock in your browser’s address bar, allow the microphone for this site, then try again — or type your transcript instead.',
+          'Microphone access is blocked. Open the padlock in your browser’s address bar, allow the microphone for this site, then start again.',
         recoverable: false,
       };
     case 'audio-capture':
       return {
         code,
-        message: 'No microphone was found. Connect one and try again, or type your transcript instead.',
+        message: 'No microphone was found. Connect one and start again.',
         recoverable: false,
       };
     case 'network':
       return {
         code,
-        message: 'The speech service could not be reached. Check your connection, or type your transcript instead.',
+        message: 'The speech service could not be reached. Check your connection and start again.',
         recoverable: true,
       };
     case 'no-speech':
@@ -114,8 +128,30 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
   const wantsToListen = useRef(false);
   const startedAt = useRef(0);
   const lastResultAt = useRef(0);
+  /**
+   * Mirrors of the transcript and events that do not wait for a React render.
+   * Stop reads these, so a result that lands in the same tick as Stop is still
+   * part of the session it belongs to.
+   */
+  const finalRef = useRef('');
+  const eventsRef = useRef<SpeechEvent[]>([]);
+  /**
+   * Where the utterance currently being recognised began, in ms since session
+   * start. Set by the first result of a phrase (interim or final) and cleared
+   * when that phrase is finalised, so a span measures speech rather than the
+   * latency between the last word and the final result.
+   */
+  const segmentStart = useRef<number | null>(null);
+  /**
+   * Set when the service was restarted; the next utterance carries it so pause
+   * detection knows the gap in front of it was a reconnection, not a silence.
+   */
+  const restartPending = useRef(false);
   const failureStreak = useRef(0);
   const silenceTimer = useRef<number | null>(null);
+  /** Resolvers waiting for the API to finish after Stop. */
+  const finaliseWaiters = useRef<Array<(s: FinalisedSession) => void>>([]);
+  const finaliseTimer = useRef<number | null>(null);
 
   const clearSilenceTimer = () => {
     if (silenceTimer.current !== null) {
@@ -123,6 +159,20 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
       silenceTimer.current = null;
     }
   };
+
+  const settleFinalise = useCallback(() => {
+    if (finaliseTimer.current !== null) {
+      clearTimeout(finaliseTimer.current);
+      finaliseTimer.current = null;
+    }
+    const waiters = finaliseWaiters.current;
+    finaliseWaiters.current = [];
+    const snapshot: FinalisedSession = {
+      finalTranscript: finalRef.current,
+      events: [...eventsRef.current],
+    };
+    waiters.forEach(w => w(snapshot));
+  }, []);
 
   const teardown = useCallback(() => {
     const rec = recRef.current;
@@ -135,7 +185,8 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
     }
     recRef.current = null;
     clearSilenceTimer();
-  }, []);
+    settleFinalise();
+  }, [settleFinalise]);
 
   useEffect(() => teardown, [teardown]);
 
@@ -165,10 +216,26 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
         if (res.isFinal) addedFinal += text;
         else live += text;
       }
+      // The first result of a phrase is the closest thing the Web Speech API
+      // gives us to "speech started here" — everything before it is microphone
+      // and service startup, which is not speaking time.
+      if (segmentStart.current === null) segmentStart.current = at;
       setInterim(live);
       if (addedFinal.trim()) {
-        setFinal(prev => (prev ? prev.trimEnd() + ' ' : '') + addedFinal.trim());
-        setEvents(prev => [...prev, { at, text: addedFinal.trim() }]);
+        const from = segmentStart.current ?? at;
+        segmentStart.current = null;
+        const afterRestart = restartPending.current;
+        restartPending.current = false;
+        const text = addedFinal.trim();
+
+        finalRef.current = (finalRef.current ? finalRef.current.trimEnd() + ' ' : '') + text;
+        const event: SpeechEvent = afterRestart
+          ? { at, startedAt: from, text, afterRestart: true }
+          : { at, startedAt: from, text };
+        eventsRef.current = [...eventsRef.current, event];
+
+        setFinal(finalRef.current);
+        setEvents(eventsRef.current);
       }
     };
 
@@ -184,12 +251,15 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
       if (!err.recoverable) {
         wantsToListen.current = false;
         setState('error');
+        settleFinalise();
       }
     };
 
     rec.onend = () => {
       if (!wantsToListen.current) {
         setState(s => (s === 'error' ? s : 'stopped'));
+        // Everything the API had to say has now been said.
+        settleFinalise();
         return;
       }
       // Spurious end — Chrome does this every ~60s. Restart, and give up only
@@ -199,19 +269,26 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
         wantsToListen.current = false;
         setError({
           code: 'restart-failed',
-          message: 'Speech recognition kept disconnecting. Your transcript so far is kept — you can stop and save, or type the rest.',
+          message: 'Speech recognition kept disconnecting. Everything heard so far is kept — stop to see your results.',
           recoverable: false,
         });
         setState('error');
+        settleFinalise();
         return;
       }
       try {
+        // A restart discards whatever phrase was in flight; the gap it opens is
+        // reconnection, not speech, so the next phrase starts its own span and
+        // is marked so the silence in front of it is not counted as a pause.
+        segmentStart.current = null;
+        restartPending.current = true;
         rec.start();
         setReconnected(true);
         window.setTimeout(() => setReconnected(false), 2600);
       } catch {
         wantsToListen.current = false;
         setState('stopped');
+        settleFinalise();
       }
     };
 
@@ -222,13 +299,13 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
       setError(describe('aborted'));
       setState('error');
     }
-  }, [lang]);
+  }, [lang, settleFinalise]);
 
   const start = useCallback(() => {
     if (!supported) {
       setError({
         code: 'unsupported',
-        message: 'Live speech recognition needs Chrome or Edge — your transcript can be typed manually instead.',
+        message: 'Live practice needs Chrome or Edge — this browser has no speech recognition.',
         recoverable: false,
       });
       setState('error');
@@ -240,6 +317,13 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
     wantsToListen.current = true;
     startedAt.current = performance.now();
     lastResultAt.current = performance.now();
+    segmentStart.current = null;
+    restartPending.current = false;
+    finalRef.current = '';
+    eventsRef.current = [];
+    setFinal('');
+    setInterim('');
+    setEvents([]);
     spinUp();
 
     clearSilenceTimer();
@@ -248,20 +332,39 @@ export function useSpeechRecognition(lang = 'en-US'): UseSpeechRecognition {
     }, 2000);
   }, [supported, spinUp]);
 
-  const stop = useCallback(() => {
+  const stop = useCallback((): Promise<FinalisedSession> => {
     wantsToListen.current = false;
+    segmentStart.current = null;
     clearSilenceTimer();
-    const rec = recRef.current;
-    if (rec) {
-      try { rec.stop(); } catch { /* ignore */ }
-    }
     setInterim('');
+
+    const rec = recRef.current;
+    if (!rec) {
+      setState(s => (s === 'error' ? s : 'stopped'));
+      return Promise.resolve({ finalTranscript: finalRef.current, events: [...eventsRef.current] });
+    }
+
+    const promise = new Promise<FinalisedSession>(resolve => {
+      finaliseWaiters.current.push(resolve);
+    });
+    // `stop()` asks the API to finish the phrase in flight and deliver it; the
+    // timer is only there so a service that never fires `end` cannot hang the
+    // results screen.
+    if (finaliseTimer.current === null) {
+      finaliseTimer.current = window.setTimeout(settleFinalise, FINALISE_GRACE_MS);
+    }
+    try { rec.stop(); } catch { settleFinalise(); }
     setState(s => (s === 'error' ? s : 'stopped'));
-  }, []);
+    return promise;
+  }, [settleFinalise]);
 
   const reset = useCallback(() => {
     teardown();
     wantsToListen.current = false;
+    segmentStart.current = null;
+    restartPending.current = false;
+    finalRef.current = '';
+    eventsRef.current = [];
     setFinal('');
     setInterim('');
     setEvents([]);

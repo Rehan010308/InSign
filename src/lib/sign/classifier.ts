@@ -12,8 +12,11 @@
  * classifier returns nothing at all — it never redistributes a softmax over
  * eight options and calls the argmax a detection.
  */
-import { motionFeatures, representativePose, type MotionFeatures, type WindowFrame } from './featureWindow';
-import { poseDistance } from './normalizer';
+import {
+  motionFeatures, representativePose, representativeSecondPose,
+  type MotionFeatures, type WindowFrame,
+} from './featureWindow';
+import { poseAgreement, type PoseAgreement, type PoseFeatures } from './normalizer';
 import { TEMPLATES, type MotionSpec, type Range, type SignId, type SignTemplate } from './classifierTemplates';
 
 export interface Classification {
@@ -30,15 +33,17 @@ export interface SignClassifier {
 /** Below this, nothing in the vocabulary is a plausible match. */
 export const MIN_MATCH_QUALITY = 0.45;
 /**
- * A template is only a candidate if the HAND SHAPE matches. Motion alone must
- * never carry a match: a loosely-specified movement plus a hand doing something
- * else is not a sign, and blending the two scores would let it look like one.
+ * A template is only a candidate if the HAND SHAPE matches well enough. Motion
+ * alone must never carry a match: a loosely-specified movement plus a hand doing
+ * something else is not a sign.
+ *
+ * Raised from 0.4 now that the fingerprint has the features to tell the shapes
+ * apart — at 0.4 a thumb-up fist still qualified as a plain fist, which is how
+ * a thumb-up circle came out as SORRY.
  */
-export const MIN_POSE_SCORE = 0.4;
+export const MIN_POSE_SCORE = 0.5;
 /** Fewer frames than this is not a sign, it is a glimpse. */
 export const MIN_FRAMES = 10;
-/** Pose-distance falloff: how far a hand may drift before the pose stops matching. */
-export const POSE_SIGMA = 0.34;
 /** Softmax temperature over template similarities. */
 export const SOFTMAX_T = 0.06;
 export const TOP_K = 3;
@@ -56,8 +61,21 @@ export function rangeScore(value: number, range: Range): number {
   return score;
 }
 
-export function motionScore(m: MotionFeatures, spec: MotionSpec): number {
+/**
+ * How much of the motion score the worst single constraint can veto — the
+ * motion-side twin of the pose fingerprint's worst-feature penalty.
+ */
+export const WORST_CONSTRAINT_WEIGHT = 0.5;
+
+export interface MotionScore {
+  score: number;
+  /** the least-satisfied constraint, for the UI and for debugging templates */
+  worst: { key: keyof MotionSpec; score: number } | null;
+}
+
+export function motionScoreDetail(m: MotionFeatures, spec: MotionSpec): MotionScore {
   const checks: number[] = [];
+  let worst: MotionScore['worst'] = null;
   const netMagnitude = Math.hypot(m.netX, m.netY);
   const values: Record<keyof MotionSpec, number> = {
     oscillationX: m.oscillationX,
@@ -69,48 +87,116 @@ export function motionScore(m: MotionFeatures, spec: MotionSpec): number {
     pathLength: m.pathLength,
     netMagnitude,
     poseChange: m.poseChange,
+    handGap: m.handGap,
+    handGapAmplitude: m.handGapAmplitude,
   };
   for (const key of Object.keys(spec) as Array<keyof MotionSpec>) {
     const range = spec[key];
     if (!range) continue;
-    checks.push(rangeScore(values[key], range));
+    const score = rangeScore(values[key], range);
+    checks.push(score);
+    if (!worst || score < worst.score) worst = { key, score };
   }
-  if (!checks.length) return 1;
+  if (!checks.length) return { score: 1, worst: null };
+
   // Geometric mean, so every constraint has to hold: a sign that travels the
   // right way but with entirely the wrong shape of path is not that sign, and
-  // averaging would let one satisfied constraint carry the others.
+  // averaging would let one satisfied constraint carry the others. The worst
+  // constraint then applies a further penalty, so a template with many loose
+  // constraints cannot out-score a stricter one by having more of them agree.
   let product = 1;
   for (const c of checks) product *= c;
-  return Math.pow(product, 1 / checks.length);
+  const geometric = Math.pow(product, 1 / checks.length);
+  const veto = worst
+    ? (1 - WORST_CONSTRAINT_WEIGHT) + WORST_CONSTRAINT_WEIGHT * worst.score
+    : 1;
+  return { score: geometric * veto, worst };
+}
+
+export function motionScore(m: MotionFeatures, spec: MotionSpec): number {
+  return motionScoreDetail(m, spec).score;
 }
 
 export interface TemplateScore {
   poseScore: number;
   motionScore: number;
   similarity: number;
+  /** what agreed least — the feature or constraint that cost this template most */
+  weakest: string | null;
+}
+
+/**
+ * How well one template explains what the hand did.
+ *
+ * Pose and motion are combined MULTIPLICATIVELY (a weighted geometric mean),
+ * not by averaging them. Averaging is what let a fist doing a perfect circle
+ * still score 0.45 for PLEASE despite a hand shape that agreed almost not at
+ * all, and let a hand that never moved keep most of GOOD's score because the
+ * shape was close. Under a product, a score near zero on either side takes the
+ * whole similarity with it — which is what "the sign was not performed" should
+ * mean.
+ */
+/**
+ * The best-matching handshape in a template's family.
+ *
+ * Best-of rather than an average: a sign accepts several handshapes, and a hand
+ * that clearly is one of them should score as that one, not be dragged down by
+ * how far it sits from the others.
+ */
+function bestVariant(pose: PoseFeatures, variants: PoseFeatures[], weights: number[]): PoseAgreement {
+  let best: PoseAgreement | null = null;
+  for (const variant of variants) {
+    const agreement = poseAgreement(pose, variant, weights);
+    if (!best || agreement.score > best.score) best = agreement;
+  }
+  return best ?? { score: 0, worst: null };
 }
 
 export function scoreTemplate(
   template: SignTemplate,
-  pose: Parameters<typeof poseDistance>[0],
-  motion: MotionFeatures
+  pose: PoseFeatures,
+  motion: MotionFeatures,
+  secondPose: PoseFeatures | null = null
 ): TemplateScore {
-  const d = poseDistance(pose, template.pose, template.weights);
-  const poseScore = Math.exp(-(d * d) / (2 * POSE_SIGMA * POSE_SIGMA));
-  const moScore = motionScore(motion, template.motion);
-  return {
-    poseScore,
-    motionScore: moScore,
-    similarity: template.poseWeight * poseScore + (1 - template.poseWeight) * moScore,
-  };
+  const primary = bestVariant(pose, template.poses, template.weights);
+  let poseScore = primary.score;
+  let weakest: string | null = primary.worst ? `pose.${primary.worst.key}` : null;
+  let weakestScore = primary.worst?.score ?? 1;
+
+  // A two-handed template has to explain BOTH hands. With no second hand in the
+  // window it cannot be what happened at all.
+  if (template.hands === 2) {
+    if (!motion.hasSecondHand || !secondPose || !template.secondPoses?.length) {
+      return { poseScore: 0, motionScore: 0, similarity: 0, weakest: 'pose.secondHand' };
+    }
+    const other = bestVariant(secondPose, template.secondPoses, template.weights);
+    poseScore = Math.sqrt(poseScore * other.score);
+    if (other.worst && other.worst.score < weakestScore) {
+      weakest = `pose2.${other.worst.key}`;
+      weakestScore = other.worst.score;
+    }
+  }
+
+  const mo = motionScoreDetail(motion, template.motion);
+  if (mo.worst && mo.worst.score < weakestScore) {
+    weakest = `motion.${mo.worst.key}`;
+    weakestScore = mo.worst.score;
+  }
+
+  const w = template.poseWeight;
+  const similarity = Math.pow(Math.max(1e-4, poseScore), w)
+    * Math.pow(Math.max(1e-4, mo.score), 1 - w);
+
+  return { poseScore, motionScore: mo.score, similarity, weakest };
 }
 
 export function templateSimilarity(
   template: SignTemplate,
-  pose: Parameters<typeof poseDistance>[0],
-  motion: MotionFeatures
+  pose: PoseFeatures,
+  motion: MotionFeatures,
+  secondPose: PoseFeatures | null = null
 ): number {
-  return scoreTemplate(template, pose, motion).similarity;
+  return scoreTemplate(template, pose, motion, secondPose).similarity;
 }
 
 export function softmax(values: number[], temperature = SOFTMAX_T): number[] {
@@ -133,9 +219,11 @@ export class TemplateMatcherClassifier implements SignClassifier {
     if (!pose) return [];
     const motion = motionFeatures(window);
 
+    const secondPose = representativeSecondPose(window);
+
     // Shape first: only templates whose hand shape matches get to compete.
     const scored = this.templates
-      .map(t => ({ template: t, score: scoreTemplate(t, pose, motion) }))
+      .map(t => ({ template: t, score: scoreTemplate(t, pose, motion, secondPose) }))
       .filter(s => s.score.poseScore >= MIN_POSE_SCORE);
     if (!scored.length) return [];
 

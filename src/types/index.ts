@@ -14,17 +14,17 @@ export const SCENARIO_LABELS: Record<Scenario, string> = {
   presentation: 'Presentation',
   phone_call: 'Phone call',
   introduction: 'Introduction',
-  conversation: 'Conversation',
+  conversation: 'Everyday conversation',
   custom: 'Custom',
 };
 
 export const SCENARIO_HINTS: Record<Scenario, string> = {
-  interview: 'Answer questions under mild pressure.',
+  interview: 'Real interview questions, one at a time.',
   presentation: 'Longer form, one idea at a time.',
-  phone_call: 'No faces, only voice.',
+  phone_call: 'A situation to talk your way through.',
   introduction: 'Say who you are in thirty seconds.',
-  conversation: 'Relaxed, back and forth.',
-  custom: 'Anything you want to practise.',
+  conversation: 'Relaxed, the way you actually talk.',
+  custom: 'Describe your own situation.',
 };
 
 export interface Profile {
@@ -41,7 +41,15 @@ export interface UserPreferences {
   theme: string | null;
 }
 
-export const DEFAULT_FILLER_WORDS = ['um', 'uh', 'like', 'you know', 'actually', 'basically'];
+/**
+ * The fillers counted unless the user edits the list in Settings. Multi-word
+ * entries are matched as whole phrases, and every entry is matched on whole
+ * tokens — "umbrella" is never an "um".
+ */
+export const DEFAULT_FILLER_WORDS = [
+  'um', 'uh', 'hmm', 'like', 'basically', 'actually',
+  'you know', 'sort of', 'kind of', 'i mean',
+];
 
 export const DEFAULT_PREFERENCES: Omit<UserPreferences, 'user_id'> = {
   store_transcripts: true,

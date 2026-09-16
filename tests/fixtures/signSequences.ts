@@ -74,7 +74,31 @@ export const SEQUENCES: Record<SignId, () => LandmarkFrame[]> = {
 
   // flat hand, short forward-and-down move
   GOOD: () => sequence(SHAPES.flatHand, t => ({ cx: 0.5, cy: 0.44 + 0.04 * t })),
+
+  // thumb, index and little finger out, held steady with a small natural drift
+  I_LOVE_YOU: () => sequence(SHAPES.iLoveYou, t => ({ cx: 0.5 + 0.004 * t, cy: 0.5 })),
+
+  // MORE is two-handed: this is the hand the one-handed path sees. The second
+  // hand comes from `secondHandFor`, and only the two-hand fixtures pair them.
+  MORE: () => sequence(SHAPES.pinchedO, t => ({ cx: 0.47 + 0.012 * Math.abs(Math.sin(t * Math.PI * 2)), cy: 0.5 })),
 };
+
+/**
+ * The other hand for a two-handed sign: the mirror of the primary, tapping in
+ * towards it. The pair is what the two-handed template is scored against — one
+ * of these alone is not the sign, and the tests check exactly that.
+ */
+export function moreSecondHand(): LandmarkFrame[] {
+  return sequence(SHAPES.pinchedO, t => ({
+    cx: 0.53 - 0.012 * Math.abs(Math.sin(t * Math.PI * 2)),
+    cy: 0.5,
+  }));
+}
+
+/** Two hands in shot but resting apart — near each other, going nowhere. */
+export function restingSecondHand(): LandmarkFrame[] {
+  return sequence(SHAPES.pinchedO, () => ({ cx: 0.68, cy: 0.5 }));
+}
 
 /** A hand doing something that is not in the vocabulary at all. */
 export function unknownSequence(): LandmarkFrame[] {

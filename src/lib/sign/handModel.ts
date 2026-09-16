@@ -127,4 +127,8 @@ export const SHAPES = {
   thumbUpFist: { thumb: 'extended', index: 'curled', middle: 'curled', ring: 'curled', pinky: 'curled' },
   twoFingers: { thumb: 'half', index: 'extended', middle: 'extended', ring: 'curled', pinky: 'curled' },
   twoFingersClosed: { thumb: 'extended', index: 'half', middle: 'half', ring: 'curled', pinky: 'curled' },
+  /** thumb, index and little finger out, middle two folded */
+  iLoveYou: { thumb: 'extended', index: 'extended', middle: 'curled', ring: 'curled', pinky: 'extended' },
+  /** fingers gathered towards the thumb, as both hands do for MORE */
+  pinchedO: { thumb: 'half', index: 'half', middle: 'half', ring: 'half', pinky: 'half', together: true },
 } satisfies Record<string, HandShape>;

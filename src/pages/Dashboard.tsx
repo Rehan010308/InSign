@@ -64,8 +64,8 @@ export default function Dashboard() {
           <span className="micro eyebrow">PRODUCT 01 · PRACTICE, NOT JUDGMENT</span>
           <h2>Speech Companion</h2>
           <p>
-            Practise a scenario out loud. InSign observes pace, pauses, repetitions and fillers —
-            locally — and remembers what it saw.
+            Answer a real question out loud. InSign measures pace, pauses, repetitions and fillers
+            — locally — then sets one measurable target for your next attempt.
           </p>
           <span className="go">START A SESSION <span className="arrow">→</span></span>
         </Link>
@@ -74,8 +74,8 @@ export default function Dashboard() {
           <span className="micro eyebrow">PRODUCT 02 · MOVEMENT, TOLERATED</span>
           <h2>Sign Translator</h2>
           <p>
-            Point your camera at a sign. Hand landmarks are stabilised on-device and matched against
-            a small prototype vocabulary of eight signs.
+            Point your camera at a sign. Hand landmarks are stabilised on-device and matched over
+            time against a controlled prototype vocabulary.
           </p>
           <span className="go">OPEN THE CAMERA <span className="arrow">→</span></span>
         </Link>

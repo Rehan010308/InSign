@@ -5,13 +5,17 @@
 InSign is an accessibility platform with two products that share one idea — the
 tool adapts to the person, not the other way round.
 
-- **Speech Companion.** Practise a scenario out loud. InSign observes pace,
-  pauses, repetitions and filler words, remembers what it saw, and derives a
-  practice recommendation from your own history. Observations, never scores.
+- **Speech Companion.** Pick a situation and InSign gives you something real to
+  answer — an interview question, a phone call to make, a project to explain. It
+  listens to how you speak (pace, pauses, repetitions, fillers), then sets one
+  measurable target and a drill for the next attempt, and compares the two.
+  Observations and targets, never scores.
 - **Sign Translator.** Point your camera at a sign. Hand landmarks are detected
   on-device, stabilised with a Kalman filter so natural movement and tremor are
-  absorbed rather than corrected, and matched against a small prototype
-  vocabulary. You can watch the raw and stabilised landmarks at the same time.
+  absorbed rather than corrected, and matched over time against a controlled
+  vocabulary. A sign is only committed once it has held long enough and steadily
+  enough to be worth committing. You can watch the raw and stabilised landmarks
+  at the same time, and the trajectory of each side by side.
 
 Nothing about the intelligence here is outsourced: there is no LLM, no cloud AI
 service, and no paid API at runtime. Everything after the browser's own speech
@@ -73,7 +77,7 @@ landing page and both products work either way.
 
 | Permission | When | Why | If you say no |
 | --- | --- | --- | --- |
-| Microphone | Only when you press Start on a speech session | To transcribe what you say through the browser's speech recognition | Type your transcript instead — the whole analysis pipeline still runs |
+| Microphone | Only when you press Start Practice on a speech session | To transcribe what you say through the browser's speech recognition, and to show a live level while you speak | Live practice needs Chrome or Edge; the rest of InSign is unaffected |
 | Camera | Only when you press "Enable camera" on the sign page | To detect hand landmarks in the browser | The sign page explains how to re-enable it; the rest of InSign is unaffected |
 
 No video is ever uploaded, stored or sent anywhere. Landmarks are not stored
@@ -84,24 +88,34 @@ confidences and the session length.
 
 These are real and they are stated in the product UI as well as here.
 
-- **The sign vocabulary is 8 signs:** HELLO, THANK YOU, YES, NO, HELP, PLEASE,
-  SORRY, GOOD. It is a prototype vocabulary, permanently badged as such in the
-  interface.
+- **The sign vocabulary is 10 signs:** HELLO, THANK YOU, YES, NO, HELP, PLEASE,
+  SORRY, GOOD, I LOVE YOU, and the two-handed MORE. It is a controlled prototype
+  vocabulary, permanently badged as such in the interface. This is not
+  sign-language translation and does not claim to be.
 - **The classifier is template matching, not a trained model.** Shapes and
   motions are hand-authored from a canonical hand model (see
   `docs/classifier.md`). It has not been validated against real signers, and it
   fails by saying "movement unclear" rather than by guessing.
-- **THANK YOU and GOOD are genuinely ambiguous here.** They share a hand shape
-  and a downward path, and a hand-only pipeline has no face to anchor them to.
-  When they tie, the confidence gate shows neither.
+- **THANK YOU and GOOD are genuinely close here.** They share a hand shape and a
+  downward path, so only the distance travelled separates them, and a hand-only
+  pipeline has no face to anchor them to. When they tie, the confidence gate
+  shows neither.
+- **Two-handed support is exactly one sign.** MORE is scored from both hands and
+  requires them to be near each other and moving together. Every other sign is
+  one-handed and ignores the second hand entirely.
 - **Browser speech recognition is not local.** Chrome and Edge may send audio to
   the browser vendor's service. Everything after the transcript — metrics,
-  pattern detection, recommendations — runs in the page. Firefox and Safari have
-  no Web Speech support, so those browsers get the typed-transcript path.
-- **Pauses in a typed transcript come from marks you type** (`...` or `—`),
-  because typed text carries no audio timing. The UI says so next to the field.
-- **Personalization needs evidence.** It refuses to claim a pattern with fewer
-  than three sessions of the same scenario in the last 14 days, and says so.
+  targets, drills, pattern detection — runs in the page. Firefox and Safari have
+  no Web Speech support, so live practice needs Chrome or Edge.
+- **A "pause" is silence between recognised phrases**, not between words: the
+  Web Speech API does not expose word timings. Microphone startup, the moment
+  before you press Stop, and a recognition service reconnecting are excluded, so
+  none of them is counted as you pausing.
+- **The system measures how you speak, not what you said.** It has no opinion on
+  whether an answer was a good answer, and it says so on the results screen.
+- **Personalization needs evidence, per scenario.** Below three sessions in the
+  same scenario it says it is building your baseline instead of claiming a
+  pattern, and interview history never shapes conversation practice.
 
 ## Documentation
 

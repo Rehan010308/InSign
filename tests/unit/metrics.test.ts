@@ -24,7 +24,7 @@ describe('wordsPerMinute', () => {
 
   it('is zero when nothing was said', () => {
     expect(wordsPerMinute('', 30_000)).toBe(0);
-    expect(wordsPerMinute('hello', 0)).toBe(0);
+    expect(wordsPerMinute('hello', 0)).toBeNull();
   });
 });
 
@@ -86,6 +86,54 @@ describe('countFillers', () => {
   });
 });
 
+describe('filler detection', () => {
+  it('counts every supported filler in the default list', () => {
+    const text = 'um uh hmm like basically actually you know sort of kind of I mean';
+    const r = countFillers(tokenize(text), DEFAULT_FILLER_WORDS);
+    expect(r.count).toBe(10);
+  });
+
+  it('is unaffected by capitalisation and punctuation', () => {
+    const r = countFillers(tokenize('Um, UH... Like! You know? Sort-of.'), DEFAULT_FILLER_WORDS);
+    // "sort-of" splits on the hyphen, so it is the phrase "sort of".
+    expect(r.count).toBe(5);
+  });
+
+  it('never matches a filler inside a longer word', () => {
+    const text = 'the umbrella likely broke, basicallyx umm hmmm actuality';
+    expect(countFillers(tokenize(text), DEFAULT_FILLER_WORDS).count).toBe(0);
+  });
+
+  it('matches a multi-word filler only as the whole phrase', () => {
+    // "you" and "know" alone are not fillers, and neither is "sort" alone.
+    expect(countFillers(tokenize('you should know the sort of the thing'), DEFAULT_FILLER_WORDS).count)
+      .toBe(1); // only "sort of"
+    expect(countFillers(tokenize('do you know it'), DEFAULT_FILLER_WORDS).count).toBe(1);
+  });
+
+  it('does not let two overlapping entries claim the same word', () => {
+    // "kind of" wins the "of"; nothing else may count it a second time.
+    const r = countFillers(tokenize('it was kind of of course fine'), ['kind of', 'of course']);
+    expect(r.count).toBe(2);
+    expect(r.hits.map(h => h.word).sort()).toEqual(['kind of', 'of course']);
+  });
+});
+
+describe('repetition detection', () => {
+  it('counts repeated words regardless of capitalisation and punctuation', () => {
+    expect(countRepetitions(tokenize('Well, well well — that happened')).count).toBe(2);
+    expect(countRepetitions(tokenize('I. I. I. think')).count).toBe(2);
+  });
+
+  it('counts a repeated phrase once', () => {
+    expect(countRepetitions(tokenize('what I mean what I mean is this')).count).toBe(1);
+  });
+
+  it('does not count a word that simply appears twice apart', () => {
+    expect(countRepetitions(tokenize('the cat sat on the mat')).count).toBe(0);
+  });
+});
+
 describe('computeMetrics', () => {
   it('produces the full observation set from a transcript and its timing', () => {
     const transcript = 'um I I think that that we should um go now';
@@ -96,9 +144,11 @@ describe('computeMetrics', () => {
     expect(m.pauseCount).toBe(2);
     expect(m.repetitionCount).toBe(2); // "I I" and "that that"
     expect(m.fillerCount).toBe(2); // two "um"
-    // 12s total minus 5.8s of measured pause = 6.2s of speaking
-    expect(m.activeSpeechMs).toBe(6200);
-    expect(m.wordsPerMinute).toBeCloseTo(106.5, 1);
+    // These events carry no utterance starts, so there is no measured speaking
+    // duration to divide by: the whole session is used rather than the leftover
+    // of subtracting arrival gaps, which is not a duration at all.
+    expect(m.activeSpeechMs).toBe(12_000);
+    expect(m.wordsPerMinute).toBe(55);
   });
 });
 

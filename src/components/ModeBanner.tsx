@@ -3,11 +3,16 @@ import { useAuth } from '../services/authService';
 import { onOfflineChange } from '../services/sessionService';
 
 /**
- * Always discloses which persistence path is live. The local demo store must
- * never be able to pass itself off as the real Supabase path.
+ * Discloses which persistence path is live, and only when it matters.
+ *
+ * With Supabase configured and reachable this renders nothing at all — a
+ * working app should not explain its own plumbing. The local store still has to
+ * announce itself, because sessions kept only in one browser profile are a real
+ * difference to the user; the configuration detail behind it belongs in the
+ * README, not on the screen.
  */
 export default function ModeBanner() {
-  const { mode, modeReason } = useAuth();
+  const { mode } = useAuth();
   const [offline, setOffline] = useState(false);
 
   useEffect(() => onOfflineChange(setOffline), []);
@@ -21,7 +26,7 @@ export default function ModeBanner() {
         <p className="micro">
           {offline
             ? 'Supabase is unreachable. Sessions are being saved in this browser and will be sent when the connection returns.'
-            : `Sessions are stored in this browser only. ${modeReason ?? ''}`}
+            : 'Sessions are stored in this browser only, and stay on this device.'}
         </p>
       </div>
     </div>

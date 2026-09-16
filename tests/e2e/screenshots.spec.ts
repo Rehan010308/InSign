@@ -42,20 +42,18 @@ for (const theme of ['dark', 'light'] as const) {
     await page.waitForTimeout(400);
     await shot(page, info, `${theme}-05-scenarios`);
 
-    await page.getByRole('button', { name: 'Interview' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
     await page.getByRole('button', { name: /how speech is processed/i }).click();
     await shot(page, info, `${theme}-06-speech-disclosure`);
 
     await page.getByTestId('begin-session').click();
-    await page.getByTestId('manual-transcript')
-      .fill('So... I think what I I wanted to say is, um, basically that this role you know fits — the work I already do.');
-    await page.waitForTimeout(300);
-    await shot(page, info, `${theme}-07-speech-practice`);
+    await page.waitForTimeout(400);
+    await shot(page, info, `${theme}-07-speech-question`);
 
-    await page.getByTestId('stop-session').click();
-    await page.waitForTimeout(300);
-    await shot(page, info, `${theme}-08-speech-review`);
+    await page.getByTestId('start-practice').click();
+    await page.waitForTimeout(500);
+    await shot(page, info, `${theme}-08-speech-listening`);
+    await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.goto('/app/speech/history');
     await page.waitForTimeout(500);

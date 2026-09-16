@@ -5,15 +5,14 @@
  */
 import type { LandmarkFrame } from './kalman';
 import {
-  INDEX_MCP, MIDDLE_MCP, PINKY_MCP, RING_MCP, WRIST,
+  INDEX_MCP, MIDDLE_MCP, PINKY_MCP, POSE_KEYS, RING_MCP, WRIST,
   normalizeHand, poseFeatures, type NormalizedHand, type PoseFeatures,
 } from './normalizer';
 
 export const WINDOW_MS = 1200;
 export const MAX_FRAMES = 48;
 
-export interface WindowFrame {
-  at: number;
+export interface HandSample {
   pose: PoseFeatures;
   hand: NormalizedHand;
   /** palm centroid in image space */
@@ -21,6 +20,16 @@ export interface WindowFrame {
   wy: number;
   /** apparent hand size for this frame — motion is measured in hand-lengths */
   scale: number;
+}
+
+export interface WindowFrame extends HandSample {
+  at: number;
+  /**
+   * The other hand, when one is in view. One-handed templates ignore it
+   * entirely, so adding it cannot change how they score; the two-handed
+   * template is the only thing that reads it.
+   */
+  second?: HandSample;
 }
 
 export interface MotionFeatures {
@@ -35,6 +44,12 @@ export interface MotionFeatures {
   oscillationY: number;
   /** how much the pose itself changed across the window */
   poseChange: number;
+  /** true when a second hand was in view for most of the window */
+  hasSecondHand: boolean;
+  /** median distance between the two palms, in hand-lengths (0 with one hand) */
+  handGap: number;
+  /** how much that distance varied across the window — a tap moves it, resting hands do not */
+  handGapAmplitude: number;
   frames: number;
   durationMs: number;
 }
@@ -45,6 +60,41 @@ export interface MotionFeatures {
  * never travels; without this, a shaking hand reads as a wave.
  */
 export const MIN_TURN_SEGMENT = 0.18;
+
+/**
+ * Undoes MediaPipe's per-axis normalization.
+ *
+ * `x` comes back divided by the frame width and `y` by the frame height, so on
+ * a 16:9 camera a hand is horizontally squashed to ~56% of its true proportions
+ * in landmark space. Every shape feature — finger spread above all — is wrong by
+ * that factor, and no amount of translating, scaling or rotating a squashed hand
+ * turns it back into a square-space one. Multiplying x by the aspect ratio does,
+ * and it is done once, here, rather than being baked into each template.
+ */
+export function toSquareSpace(frame: LandmarkFrame, aspect: number): LandmarkFrame {
+  if (!Number.isFinite(aspect) || aspect === 1 || aspect <= 0) return frame;
+  return frame.map(p => ({ x: p.x * aspect, y: p.y, z: p.z * aspect }));
+}
+
+/**
+ * One hand, converted to the square space the rest of the geometry lives in and
+ * reduced to a fingerprint plus a palm position. Returns null for a hand that is
+ * incomplete or too small to read, which is the only place that check belongs.
+ */
+export function toSample(landmarks: LandmarkFrame | null | undefined, aspect = 1): HandSample | null {
+  if (!landmarks || landmarks.length < 21) return null;
+  const square = toSquareSpace(landmarks, aspect);
+  const hand = normalizeHand(square);
+  if (!hand) return null;
+  // The palm centroid moves like the hand does but jitters far less than any
+  // single landmark, so motion features read the palm, not the wrist point.
+  const palm = [WRIST, INDEX_MCP, MIDDLE_MCP, RING_MCP, PINKY_MCP];
+  let px = 0, py = 0;
+  for (const i of palm) { px += square[i].x; py += square[i].y; }
+  px /= palm.length;
+  py /= palm.length;
+  return { hand, pose: poseFeatures(hand), wx: px, wy: py, scale: hand.scale };
+}
 
 export class FeatureWindow {
   private frames: WindowFrame[] = [];
@@ -61,26 +111,20 @@ export class FeatureWindow {
     return this.frames;
   }
 
-  /** @returns the window frame that was added, or null if the hand was unusable */
-  push(landmarks: LandmarkFrame, at: number): WindowFrame | null {
-    const hand = normalizeHand(landmarks);
-    if (!hand) return null;
-    // The palm centroid moves like the hand does but jitters far less than any
-    // single landmark, so motion features read the palm, not the wrist point.
-    const palm = [WRIST, INDEX_MCP, MIDDLE_MCP, RING_MCP, PINKY_MCP];
-    let px = 0, py = 0;
-    for (const i of palm) { px += landmarks[i].x; py += landmarks[i].y; }
-    px /= palm.length;
-    py /= palm.length;
+  /**
+   * @param aspect video width / height. Landmarks arrive normalized per axis,
+   *        so they are converted to a square space here — the single boundary
+   *        where the pipeline's geometry starts. Everything downstream (pose
+   *        fingerprints, motion, the templates) then shares one convention.
+   * @returns the window frame that was added, or null if the hand was unusable
+   */
+  push(landmarks: LandmarkFrame, at: number, aspect = 1, second?: LandmarkFrame | null): WindowFrame | null {
+    const sample = toSample(landmarks, aspect);
+    if (!sample) return null;
 
-    const frame: WindowFrame = {
-      at,
-      hand,
-      pose: poseFeatures(hand),
-      wx: px,
-      wy: py,
-      scale: hand.scale,
-    };
+    const frame: WindowFrame = { at, ...sample };
+    const other = second ? toSample(second, aspect) : null;
+    if (other) frame.second = other;
     this.frames.push(frame);
     const cutoff = at - WINDOW_MS;
     while (this.frames.length && (this.frames[0].at < cutoff || this.frames.length > MAX_FRAMES)) {
@@ -98,6 +142,7 @@ export function motionFeatures(frames: readonly WindowFrame[]): MotionFeatures {
   const empty: MotionFeatures = {
     pathLength: 0, netX: 0, netY: 0, amplitudeX: 0, amplitudeY: 0,
     oscillationX: 0, oscillationY: 0, poseChange: 0,
+    hasSecondHand: false, handGap: 0, handGapAmplitude: 0,
     frames: frames.length, durationMs: 0,
   };
   if (frames.length < 2) return empty;
@@ -133,6 +178,19 @@ export function motionFeatures(frames: readonly WindowFrame[]): MotionFeatures {
     + Math.abs(last.pose.index - first.pose.index)
     + Math.abs(last.pose.middle - first.pose.middle);
 
+  // Two-hand relation. Measured only over the frames where BOTH hands were
+  // actually seen, and reported as "no second hand" unless that was most of the
+  // window — a hand that wandered through shot for three frames is not half of
+  // a two-handed sign.
+  const paired = frames.filter(f => f.second);
+  const gaps = paired.map(f => Math.hypot(f.wx - f.second!.wx, f.wy - f.second!.wy) / refScale);
+  const hasSecondHand = gaps.length >= Math.ceil(frames.length * 0.6) && gaps.length >= 2;
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const handGap = hasSecondHand ? sortedGaps[Math.floor(sortedGaps.length / 2)] : 0;
+  const handGapAmplitude = hasSecondHand
+    ? sortedGaps[sortedGaps.length - 1] - sortedGaps[0]
+    : 0;
+
   return {
     pathLength,
     netX: nx(last) - nx(first),
@@ -142,9 +200,23 @@ export function motionFeatures(frames: readonly WindowFrame[]): MotionFeatures {
     oscillationX: oscX,
     oscillationY: oscY,
     poseChange,
+    hasSecondHand,
+    handGap,
+    handGapAmplitude,
     frames: frames.length,
     durationMs: last.at - first.at,
   };
+}
+
+/**
+ * The second hand's pose across the window, for the two-handed template. Null
+ * whenever there was no steady second hand to describe.
+ */
+export function representativeSecondPose(frames: readonly WindowFrame[]): PoseFeatures | null {
+  const paired = frames.filter(f => f.second);
+  if (paired.length < 2) return null;
+  const asPrimary = paired.map(f => ({ ...f, ...f.second! }));
+  return representativePose(asPrimary);
 }
 
 /**
@@ -182,23 +254,13 @@ export function representativePose(frames: readonly WindowFrame[]): PoseFeatures
   const start = Math.floor(frames.length * 0.2);
   const end = Math.max(start + 1, Math.ceil(frames.length * 0.85));
   const slice = frames.slice(start, end);
-  const sum: PoseFeatures = {
-    thumb: 0, index: 0, middle: 0, ring: 0, pinky: 0, spread: 0, pinch: 0, palmSide: 0,
-  };
-  for (const f of slice) {
-    sum.thumb += f.pose.thumb;
-    sum.index += f.pose.index;
-    sum.middle += f.pose.middle;
-    sum.ring += f.pose.ring;
-    sum.pinky += f.pose.pinky;
-    sum.spread += f.pose.spread;
-    sum.pinch += f.pose.pinch;
-    sum.palmSide += f.pose.palmSide;
+  // Averaged over POSE_KEYS rather than field by field, so a feature added to
+  // the fingerprint cannot be silently left out of the representative pose.
+  const out = {} as PoseFeatures;
+  for (const key of POSE_KEYS) {
+    let sum = 0;
+    for (const f of slice) sum += f.pose[key];
+    out[key] = sum / slice.length;
   }
-  const n = slice.length;
-  return {
-    thumb: sum.thumb / n, index: sum.index / n, middle: sum.middle / n,
-    ring: sum.ring / n, pinky: sum.pinky / n, spread: sum.spread / n,
-    pinch: sum.pinch / n, palmSide: sum.palmSide / n,
-  };
+  return out;
 }

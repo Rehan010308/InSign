@@ -108,10 +108,11 @@ test.describe('accessibility', () => {
   test('live regions exist for the transcript and the sign output', async ({ page }) => {
     await signUp(page);
     await page.goto('/app/speech');
-    await page.getByRole('button', { name: 'Interview' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
     await page.getByTestId('begin-session').click();
+    await page.getByTestId('start-practice').click();
     await expect(page.getByTestId('speech-state')).toHaveAttribute('role', 'status');
+    await expect(page.getByTestId('transcript')).toHaveAttribute('aria-live', 'polite');
 
     await page.goto('/app/sign');
     await expect(page.getByTestId('sign-strip')).toHaveAttribute('aria-live', 'polite');

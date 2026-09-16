@@ -92,7 +92,9 @@ export function drawOverlay(
   raw: LandmarkFrame | null,
   stabilized: LandmarkFrame | null,
   colors: OverlayColors,
-  mirror = true
+  mirror = true,
+  secondRaw: LandmarkFrame | null = null,
+  secondStabilized: LandmarkFrame | null = null
 ): void {
   const { width: w, height: h } = size;
   ctx.clearRect(0, 0, w, h);
@@ -103,12 +105,74 @@ export function drawOverlay(
   for (let x = 44; x < w; x += 44) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
   for (let y = 44; y < h; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
 
-  if (raw) drawSkeleton(ctx, raw, w, h, colors.raw, colors.rawPoint, 1.4, true, 2, mirror);
-  if (stabilized) {
+  const pair = (r: LandmarkFrame | null, s: LandmarkFrame | null) => {
+    if (r) drawSkeleton(ctx, r, w, h, colors.raw, colors.rawPoint, 1.4, true, 2, mirror);
+    if (s) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(166,124,51,0.35)';
+      ctx.shadowBlur = 10;
+      drawSkeleton(ctx, s, w, h, colors.stable, colors.stablePoint, 2.2, false, 3.2, mirror);
+      ctx.restore();
+    }
+  };
+
+  // The second hand is drawn the same way, so "two hands tracked" is something
+  // the user can see rather than a claim in a chip.
+  pair(secondRaw, secondStabilized);
+  pair(raw, stabilized);
+}
+
+export interface TracePoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * The RAW vs STABILIZED trajectory strip.
+ *
+ * Both lines are the SAME landmark — the middle-finger knuckle — over the same
+ * frames: one as the detector reported it, one as the Kalman filter estimated
+ * it. Nothing here is generated or eased for effect; when the hand is steady
+ * the two lines sit on top of each other, and when it is not, the difference
+ * between them is the jitter the filter removed.
+ */
+export function drawTrace(
+  ctx: CanvasRenderingContext2D,
+  size: { width: number; height: number },
+  raw: readonly TracePoint[],
+  stabilized: readonly TracePoint[],
+  colors: OverlayColors
+): void {
+  const { width: w, height: h } = size;
+  ctx.clearRect(0, 0, w, h);
+  if (raw.length < 2) return;
+
+  // Both series share one vertical scale, or the comparison would be a lie.
+  // The window is centred on the raw signal and never smaller than a floor, so
+  // a steady hand shows as a flat pair of lines rather than as amplified noise.
+  const ys = raw.map(p => p.y);
+  const mid = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const span = Math.max(0.05, (Math.max(...ys) - Math.min(...ys)) * 1.3);
+  const px = (i: number, n: number) => (i / Math.max(1, n - 1)) * w;
+  const py = (y: number) => h / 2 - ((y - mid) / span) * h;
+
+  const line = (points: readonly TracePoint[], stroke: string, width: number, dashed: boolean) => {
     ctx.save();
-    ctx.shadowColor = 'rgba(166,124,51,0.35)';
-    ctx.shadowBlur = 10;
-    drawSkeleton(ctx, stabilized, w, h, colors.stable, colors.stablePoint, 2.2, false, 3.2, mirror);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    if (dashed) ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const x = px(i, points.length);
+      const y = py(p.y);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
     ctx.restore();
-  }
+  };
+
+  line(raw, colors.raw, 1.2, true);
+  line(stabilized, colors.stable, 2, false);
 }

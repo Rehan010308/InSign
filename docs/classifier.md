@@ -5,9 +5,10 @@ because the interface makes honest claims easy to keep and easy to replace.
 
 ## What it is
 
-A **template matcher**. Eight signs, each described as a hand shape plus a set of
-motion constraints. No training data, no weights, no model file. It runs in a
-few hundred microseconds on the main thread.
+A **template matcher**. Ten signs, each described as a family of accepted hand
+shapes plus a set of motion constraints — and, for the one two-handed sign, a
+constraint on how the two hands relate. No training data, no weights, no model
+file. It runs in a few hundred microseconds on the main thread.
 
 ## What it is not
 
@@ -29,13 +30,24 @@ far more readily than it guesses.
 | PLEASE | open palm | circles |
 | SORRY | fist | circles |
 | GOOD | flat hand, fingers together | forward and down, shorter than THANK YOU |
+| I LOVE YOU | thumb, index and little finger out | held steady |
+| MORE | **both hands** gathered to a point | fingertips tapping together |
 
-**Known ambiguity:** THANK YOU and GOOD share a hand shape and a downward path.
-Separating them needs the face as an anchor, which a hand-only pipeline does not
-have. They routinely land inside the context engine's ambiguity window, and the
-confidence gate then shows neither. That is the correct outcome, it is stated in
-the UI's vocabulary list, and `tests/unit/classifier.test.ts` asserts the tie
-rather than pretending one of them wins.
+**Known ambiguity:** THANK YOU and GOOD share a hand shape and a downward path,
+so the only thing separating them is how far the hand travels. Separating them
+properly needs the face as an anchor, which a hand-only pipeline does not have.
+A clean performance of either names itself with the other as runner-up; anything
+in between lands inside the context engine's ambiguity window and the confidence
+gate then shows neither. That is the correct outcome, it is stated in the UI's
+vocabulary list, and `tests/unit/classifier.test.ts` asserts it.
+
+**Two hands.** MORE is the only two-handed template. It is scored only when a
+second hand is present for most of the window, and its `handGap` constraints are
+what make it a two-handed *sign* rather than two hands that happen to be in
+shot. One-handed templates never read the second hand at all, so a resting hand
+in frame cannot change a one-handed result — `tests/unit/classifier.test.ts`
+asserts that too. Nothing beyond this vocabulary is claimed: this is a
+controlled prototype set, not sign-language translation.
 
 ## The feature space
 
@@ -49,9 +61,39 @@ frame, how far away it is, and how it is tilted.
 | Feature | Meaning |
 | --- | --- |
 | `thumb`…`pinky` | tip-to-wrist distance per finger, in hand-lengths |
+| `curlIndex`…`curlPinky` | tip-to-own-knuckle distance — a curled finger folds back towards its MCP, which the tip-to-wrist distance understates |
+| `gapIM`, `gapMR`, `gapRP` | gaps between adjacent fingertips: the profile of how spread the hand is |
 | `spread` | index-tip to pinky-tip distance |
 | `pinch` | thumb-tip to index-tip distance |
+| `thumbOut` | thumb-tip to index knuckle — a tucked thumb sits on the palm, a raised one does not |
 | `palmSide` | signed x of the pinky knuckle — **weight 0 in every template**, because it flips with handedness and guessing at it would invent precision |
+
+The last three groups exist because of a measured failure. With only the five
+tip-to-wrist distances plus `spread` and `pinch`, an open palm and a flat hand
+scored 0.74 alike (they differ only in how far apart the fingers are, which
+barely moves a tip-to-wrist distance), and a fist and a thumb-up fist scored
+0.54 alike. One or two disagreeing features were then averaged away by the rest
+— which is how a still open palm came out as GOOD at 0.55, and a thumb-up circle
+came out as SORRY at 0.70.
+
+### Combining features without averaging a violation away
+
+`poseAgreement()` scores each feature with a Gaussian on its difference, then
+combines them as a **weighted geometric mean** and multiplies by a penalty from
+the single worst feature (`WORST_FEATURE_WEIGHT`, 0.5). A feature that scores
+near zero therefore drags the whole agreement towards zero instead of being
+outvoted. `tests/unit/normalizer.test.ts` asserts that fifteen agreeing features
+cannot hide one that is badly wrong.
+
+### Handshape families, not single points
+
+A sign is a *family* of handshapes: real signers rest the little finger,
+half-extend the thumb, and pass through intermediate shapes on the way (NO is a
+handshape *changing*, so the window's representative pose is the middle of the
+movement and matches neither end). Each template therefore carries several
+accepted fingerprints in `poses[]` and is scored best-of. This buys tolerance
+for imperfect hands **without** loosening any threshold — which matters, because
+loosening thresholds is exactly what would let the confusions back in.
 
 ### Motion features (`featureWindow.ts`)
 
@@ -63,7 +105,9 @@ centroid is an absolute position rather than a displacement. That bug once made
 a waving hand read as a circle.
 
 `pathLength`, `netX`/`netY`, `amplitudeX`/`amplitudeY`, `oscillationX`/`oscillationY`,
-`poseChange`.
+`poseChange`, and for two hands `handGap` (median distance between the palms)
+and `handGapAmplitude` (how much that distance varied — a tap moves it, two
+resting hands do not).
 
 Turning points are counted with a zigzag detector that ignores any wobble
 smaller than `MIN_TURN_SEGMENT` (0.18 hand-lengths). Tremor reverses direction
@@ -79,43 +123,60 @@ fingerprint path a live hand takes:
 {
   id: 'HELP',
   description: 'Fist with the thumb up, lifting slightly.',
-  shape: SHAPES.thumbUpFist,              // handModel.ts: five finger states
-  pose: shapeFingerprint(SHAPES.thumbUpFist),
-  weights: [1.6, 1.2, 1.2, 1.0, 0.9, 0.9, 1.0, 0],   // POSE_KEYS order
+  shape: SHAPES.thumbUpFist,               // handModel.ts: five finger states
+  poses: variants(SHAPES.thumbUpFist, { pinky: 'half' }, { index: 'half' }),
+  weights: weightsFor({ thumb: 2.0, thumbOut: 2.0, curlIndex: 1.3, /* … */ }),
   poseWeight: 0.65,                        // shape vs movement
   motion: {
-    netY: { max: -0.15, soft: 0.25 },      // travels upward
+    netY: { max: -0.15, soft: 0.1 },       // travels upward
     oscillationY: { max: 2, soft: 1.5 },
   },
 }
 ```
 
+Weights are given **by feature name** (`weightsFor`), not as a positional array:
+with sixteen features a positional array was a transcription error waiting to
+happen, and it hid which distinction each template actually relies on.
+
 A `Range` is `{ min?, max?, soft? }`: 1 inside the range, decaying linearly to 0
-across `soft` outside it.
+across `soft` outside it. The `soft` margin is not decoration — a margin wider
+than the constraint itself means a hand that never moves still scores half way
+on "must travel downward", which is precisely how a still hand read as GOOD.
+Keep a defining constraint's margin well under its own magnitude.
 
 ## Confidence maths
 
 ```
-poseScore    = exp(-d² / 2σ²)             d = weighted distance to the template pose, σ = 0.34
-motionScore  = geometric mean of the range scores
-similarity   = poseWeight · poseScore + (1 - poseWeight) · motionScore
+poseScore    = best over poses[] of poseAgreement(pose, variant, weights)
+motionScore  = geometric mean of the range scores × worst-constraint penalty
+similarity   = poseScore^poseWeight · motionScore^(1 − poseWeight)
 ```
+
+**The combination is multiplicative, not an average.** That is the single most
+important line in this file. Under the old weighted sum, a fist doing a perfect
+circle scored 0.56 for PLEASE with a hand-shape agreement of 0.01, and a fist
+that never moved still scored 0.45 for SORRY on shape alone. Under a product, a
+score near zero on either side takes the whole similarity with it — which is
+what "the sign was not performed" should mean. `motionScore` carries the same
+idea internally: a geometric mean over the constraints, then a further penalty
+from the least-satisfied one, so a template with many loose constraints cannot
+out-score a stricter one by having more of them agree.
 
 Four gates, in order:
 
 1. **Frames.** Fewer than 10 frames in the window → nothing. A glimpse is not a
    sign.
-2. **Shape.** A template is only a candidate if `poseScore ≥ 0.4`. Motion alone
+2. **Shape.** A template is only a candidate if `poseScore ≥ 0.5`. Motion alone
    must never carry a match; without this gate a loosely-specified movement plus
-   a hand doing something else scored as a sign.
+   a hand doing something else scored as a sign. (0.5 rather than the old 0.4
+   only because the fingerprint now has the features to tell the shapes apart —
+   at 0.4 a thumb-up fist still qualified as a plain fist.)
+   A two-handed template additionally scores zero unless a second hand was
+   present for most of the window.
 3. **Quality.** `quality = max(similarity)`. Below `MIN_MATCH_QUALITY` (0.45) the
    classifier returns an **empty array** — the honest answer to "which of these
-   eight is it?" is often "none of them".
+   ten is it?" is often "none of them".
 4. **Share.** `confidence = quality × softmax(similarities)[i]`, capped at 0.98.
-
-The geometric mean in `motionScore` is the reason a circle cannot pass as a wave:
-one violated constraint zeroes the whole motion score instead of being averaged
-away by three satisfied ones.
 
 An absolute quality times a relative share is what keeps the output honest. A
 hand that half-matches two templates produces two mediocre confidences, not one
@@ -138,8 +199,44 @@ candidate that forms a common sequence (HELLO → THANK YOU, PLEASE → THANK YO
 choose among candidates the classifier produced; `tests/unit/contextEngine.test.ts`
 asserts it cannot introduce a sign that was never on the table.
 
-Finally the pipeline requires a decision to hold for 400 ms before emitting, and
-will not fire the same sign twice within 1.5 s.
+## Committing a sign
+
+A single window's answer is allowed to move around; the **recognised output is
+not**. `useSignPipeline` keeps a candidate separate from the committed sequence:
+
+```
+candidate → stability check → confidence check → commit
+```
+
+A candidate is committed only when it has been the answer for `HOLD_MS` (500 ms)
+**and** across `HOLD_AGREEMENTS` (4) consecutive classifications. At ~30 fps
+with a classification every 5 frames there are about six answers a second, so
+that is roughly two thirds of a second of consistent evidence from two
+independent measures — a clock and a count. Neither alone is enough: a burst of
+classifications satisfies a count quickly, and a slow frame rate satisfies a
+clock with two answers. One disagreeing classification is treated as a blink
+(`HOLD_GRACE`); two in a row resets the hold.
+
+Until that bar is met the UI shows the candidate as **HOLD POSITION —
+CONFIRMING**, or **UNCERTAIN** below the gate, and the committed sequence does
+not change. The progress towards the bar is shown as a stability percentage.
+
+Repeats need a **release**: after a sign is committed, the same sign cannot be
+committed again until the recognizer has seen something else (a different
+candidate, or the hand leaving view), in addition to a 1.5 s debounce. Without
+that, a single held wave became HELLO HELLO HELLO.
+
+## Stop and Save
+
+Pressing Stop (or Save) sets a freeze flag and bumps an epoch counter **before
+anything else happens**. From that instant `processFrame` returns immediately,
+and any classification already in flight resolves against the old epoch and is
+discarded. No frame the camera saw before Stop can add a token, move the
+candidate, change a confidence, or update the context engine afterwards. The
+camera tracks are stopped and the landmarker is closed in the same call, and
+both hooks also release on unmount, so leaving the route ends the camera too.
+`tests/e2e/sign.spec.ts` keeps signing a different sign after Stop and asserts
+the output is byte-for-byte unchanged.
 
 ## Replacing it with a trained model
 
@@ -175,15 +272,17 @@ measured.
 | Constant | File | Default |
 | --- | --- | --- |
 | `MIN_MATCH_QUALITY` | `classifier.ts` | 0.45 |
-| `MIN_POSE_SCORE` | `classifier.ts` | 0.4 |
+| `MIN_POSE_SCORE` | `classifier.ts` | 0.5 |
 | `MIN_FRAMES` | `classifier.ts` | 10 |
-| `POSE_SIGMA` | `classifier.ts` | 0.34 |
+| `WORST_CONSTRAINT_WEIGHT` | `classifier.ts` | 0.5 |
+| `FEATURE_SIGMA` / `WORST_FEATURE_WEIGHT` | `normalizer.ts` | 0.3 / 0.5 |
 | `SOFTMAX_T` | `classifier.ts` | 0.06 |
 | `WINDOW_MS` | `featureWindow.ts` | 1200 |
 | `MIN_TURN_SEGMENT` | `featureWindow.ts` | 0.18 |
 | `processNoise` / `measurementNoise` | `kalman.ts` | 0.2 / 0.006 |
 | `AMBIGUITY_DELTA` / `AMBIGUITY_WINDOWS` | `contextEngine.ts` | 0.08 / 3 |
-| `HOLD_MS` / `REPEAT_DEBOUNCE_MS` | `useSignPipeline.ts` | 400 / 1500 |
+| `HOLD_MS` / `HOLD_AGREEMENTS` | `useSignPipeline.ts` | 500 / 4 |
+| `REPEAT_DEBOUNCE_MS` | `useSignPipeline.ts` | 1500 |
 
 The Kalman defaults were tuned against a 0.5–2 Hz hand movement carrying a 6 Hz
 tremor: they cut the error against the intended trajectory by roughly half at

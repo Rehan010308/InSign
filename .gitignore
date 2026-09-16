@@ -3,10 +3,11 @@ dist/
 dist-ssr/
 .vite/
 
-# secrets — only .env.example is committed
+# secrets — only .env.example and the (empty) Playwright overrides are committed
 .env
 .env.*
 !.env.example
+!.env.test
 
 # test artifacts
 test-results/

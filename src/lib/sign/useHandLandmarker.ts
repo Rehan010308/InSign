@@ -19,8 +19,24 @@ const CDN_MODEL =
 export interface HandResult {
   /** landmarks of the hand being tracked, in normalized image space (0..1) */
   landmarks: LandmarkFrame | null;
+  /**
+   * The other hand, when one is in view. One-handed recognition ignores it
+   * completely — it exists so the two-handed template has something to score
+   * and so both hands can be drawn.
+   */
+  secondary: LandmarkFrame | null;
   /** how many hands the detector saw this frame */
   handCount: number;
+  /** 'Left' | 'Right' as the detector labelled the tracked hand, when it did */
+  handLabel: string | null;
+  secondaryLabel: string | null;
+  /**
+   * width / height of the video frame. MediaPipe normalizes x by the frame
+   * width and y by its height, so on any non-square camera the same physical
+   * distance is a different number on each axis. Downstream geometry has to
+   * undo that before it compares a hand to anything.
+   */
+  aspect: number;
 }
 
 export interface UseHandLandmarker {
@@ -36,16 +52,46 @@ export interface UseHandLandmarker {
 }
 
 /**
- * Picks the hand to track when more than one is visible: the one closest to the
- * centre of the frame, which is almost always the one the user is signing with.
+ * How much bigger a rival hand has to look before tracking switches to it.
+ * Without hysteresis two hands at similar distance swap the tracked hand from
+ * frame to frame, and the temporal window ends up holding a sequence that no
+ * single hand ever performed.
  */
-function pickPrimary(hands: LandmarkFrame[]): number {
+const SWITCH_MARGIN = 1.25;
+
+/** Apparent size of a hand: wrist → middle-finger knuckle. */
+function handSize(hand: LandmarkFrame): number {
+  if (!hand || hand.length < 21) return 0;
+  return Math.hypot(hand[9].x - hand[0].x, hand[9].y - hand[0].y);
+}
+
+/**
+ * Picks the hand to track when more than one is visible.
+ *
+ * The prototype vocabulary is one-handed, so exactly one hand must reach the
+ * classifier, and it must be the SAME hand for as long as it is in view:
+ * the detector's ordering is not stable, so the choice is made by handedness
+ * label first (stay on the hand we were already tracking) and by apparent size
+ * second, with hysteresis so a near-tie does not oscillate.
+ */
+export function pickPrimary(
+  hands: LandmarkFrame[],
+  labels: Array<string | null>,
+  previousLabel: string | null
+): number {
+  if (hands.length === 1) return 0;
+
   let best = 0;
-  let bestDist = Infinity;
+  let bestSize = -Infinity;
   for (let i = 0; i < hands.length; i++) {
-    const wrist = hands[i][0];
-    const d = Math.hypot(wrist.x - 0.5, wrist.y - 0.5);
-    if (d < bestDist) { bestDist = d; best = i; }
+    const size = handSize(hands[i]);
+    if (size > bestSize) { bestSize = size; best = i; }
+  }
+
+  if (previousLabel) {
+    const keep = labels.indexOf(previousLabel);
+    // Stay on the hand already being tracked unless the other is clearly nearer.
+    if (keep >= 0 && handSize(hands[keep]) * SWITCH_MARGIN >= bestSize) return keep;
   }
   return best;
 }
@@ -57,6 +103,8 @@ export function useHandLandmarker(): UseHandLandmarker {
   const [usedCdn, setUsedCdn] = useState(false);
   const ref = useRef<HandLandmarker | null>(null);
   const loadingRef = useRef<Promise<void> | null>(null);
+  /** handedness label of the hand currently being tracked, for stickiness */
+  const trackedLabel = useRef<string | null>(null);
 
   const close = useCallback(() => {
     try { ref.current?.close(); } catch { /* already closed */ }
@@ -123,12 +171,43 @@ export function useHandLandmarker(): UseHandLandmarker {
 
   const detect = useCallback((video: HTMLVideoElement, timestampMs: number): HandResult => {
     const landmarker = ref.current;
-    if (!landmarker || video.readyState < 2) return { landmarks: null, handCount: 0 };
+    const aspect = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1;
+    const none: HandResult = {
+      landmarks: null, secondary: null, handCount: 0, handLabel: null, secondaryLabel: null, aspect,
+    };
+    if (!landmarker || video.readyState < 2) return none;
+
     const result = landmarker.detectForVideo(video, timestampMs);
     const hands = (result.landmarks ?? []) as LandmarkFrame[];
-    if (!hands.length) return { landmarks: null, handCount: 0 };
-    const idx = hands.length === 1 ? 0 : pickPrimary(hands);
-    return { landmarks: hands[idx], handCount: hands.length };
+    if (!hands.length) { trackedLabel.current = null; return none; }
+
+    const categories = (result.handedness ?? []) as Array<Array<{ categoryName?: string }>>;
+    const labels = hands.map((_, i) => categories[i]?.[0]?.categoryName ?? null);
+    const idx = pickPrimary(hands, labels, trackedLabel.current);
+    const hand = hands[idx];
+
+    // A partial hand is not a hand: the whole geometry pipeline indexes fixed
+    // landmarks, so an incomplete frame must not reach it.
+    if (!hand || hand.length < 21) { trackedLabel.current = null; return none; }
+
+    trackedLabel.current = labels[idx];
+
+    // The other hand, if the detector found one and it is complete.
+    let secondary: LandmarkFrame | null = null;
+    let secondaryLabel: string | null = null;
+    for (let i = 0; i < hands.length; i++) {
+      if (i === idx) continue;
+      if (hands[i] && hands[i].length >= 21) { secondary = hands[i]; secondaryLabel = labels[i]; break; }
+    }
+
+    return {
+      landmarks: hand,
+      secondary,
+      handCount: hands.length,
+      handLabel: labels[idx],
+      secondaryLabel,
+      aspect,
+    };
   }, []);
 
   return { state, error, delegate, usedCdn, load, detect, close };

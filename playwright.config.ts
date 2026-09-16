@@ -41,7 +41,10 @@ export default defineConfig({
     },
   })),
   webServer: {
-    command: 'npm run dev',
+    // `--mode test` loads .env.test, which blanks the Supabase configuration so
+    // the suite runs against the local demo store: deterministic, offline, and
+    // leaving nothing behind in a real project.
+    command: 'npm run dev -- --mode test',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
     timeout: 120_000,

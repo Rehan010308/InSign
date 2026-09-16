@@ -50,47 +50,104 @@ test.describe('auth', () => {
   test('the persistence mode is always disclosed', async ({ page }) => {
     await signUp(page);
     await expect(page.getByText('LOCAL DEMO MODE')).toBeVisible();
+    // The banner explains the consequence, not the configuration.
+    await expect(page.locator('.mode-banner')).not.toContainText('VITE_SUPABASE');
   });
 });
 
-test.describe('speech practice', () => {
-  test('a typed transcript produces exactly the expected metrics', async ({ page }) => {
+test.describe('scenario practice', () => {
+  test('every scenario opens its own kind of practice', async ({ page }) => {
     const errors = trackConsoleErrors(page);
     await signUp(page);
-    await page.goto('/app/speech');
 
-    await page.getByRole('button', { name: 'Interview' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
-    await page.getByTestId('begin-session').click();
+    const cases = [
+      { button: 'Interview', screen: 'INTERVIEW PRACTICE', kind: 'QUESTION' },
+      { button: 'Presentation', screen: 'PRESENTATION PRACTICE', kind: 'PROMPT' },
+      { button: 'Phone call', screen: 'PHONE CALL PRACTICE', kind: 'SITUATION' },
+      { button: 'Introduction', screen: 'INTRODUCTION PRACTICE', kind: 'PROMPT' },
+      { button: 'Everyday conversation', screen: 'EVERYDAY CONVERSATION', kind: 'SITUATION' },
+    ];
 
-    // 11 words · 2 typed pause marks · "I I" repeated · um + basically + you know
-    await page.getByTestId('manual-transcript')
-      .fill('um I I think... we should basically you know go -- now');
-    await page.getByTestId('manual-seconds').fill('60');
+    for (const c of cases) {
+      await page.goto('/app/speech');
+      await page.getByRole('button', { name: c.button, exact: true }).click();
+      await page.getByTestId('begin-session').click();
 
-    await expect(page.getByTestId('metric-wpm')).toHaveText('11');
-    await expect(page.getByTestId('metric-pauses')).toHaveText('2');
-    await expect(page.getByTestId('metric-repetitions')).toHaveText('1');
-    await expect(page.getByTestId('metric-fillers')).toHaveText('3');
-
-    await page.getByTestId('stop-session').click();
-    await expect(page.getByTestId('review-transcript')).toContainText('we should basically');
-
-    await page.getByTestId('save-session').click();
-    await page.waitForURL('**/app/speech/history**');
-    await expect(page.getByTestId('session-list').locator('.session-row')).toHaveCount(1);
+      const card = page.getByTestId('practice-prompt');
+      await expect(card).toContainText(c.screen);
+      await expect(card).toContainText(c.kind);
+      // A real prompt, not a placeholder.
+      await expect(page.getByTestId('prompt-text')).not.toBeEmpty();
+      const prompt = await page.getByTestId('prompt-text').textContent();
+      expect(prompt!.trim().length).toBeGreaterThan(10);
+      await expect(page.getByTestId('start-practice')).toBeVisible();
+    }
     expect(errors, errors.join('\n')).toEqual([]);
   });
 
-  test('saving an empty transcript is refused inline', async ({ page }) => {
+  test('a phone call states the situation and the task it sets', async ({ page }) => {
     await signUp(page);
     await page.goto('/app/speech');
-    await page.getByRole('button', { name: 'Conversation' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
+    await page.getByRole('button', { name: 'Phone call', exact: true }).click();
     await page.getByTestId('begin-session').click();
-    await page.getByTestId('stop-session').click();
-    await page.getByTestId('save-session').click();
-    await expect(page.getByRole('alert')).toContainText('nothing to save yet');
+    await expect(page.getByTestId('practice-prompt')).toContainText('YOUR TASK');
+    await expect(page.getByTestId('prompt-task')).not.toBeEmpty();
+  });
+
+  test('an interview shows where you are in the sitting', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/app/speech');
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
+    await page.getByTestId('begin-session').click();
+    await expect(page.getByTestId('question-progress')).toContainText('QUESTION 1 OF 5');
+  });
+
+  test('another question keeps the scenario and changes the question', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/app/speech');
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
+    await page.getByTestId('begin-session').click();
+
+    const first = await page.getByTestId('prompt-text').textContent();
+    await page.getByTestId('skip-question').click();
+    await expect(page.getByTestId('prompt-text')).not.toHaveText(first!);
+    await expect(page.getByTestId('practice-prompt')).toContainText('INTERVIEW PRACTICE');
+  });
+
+  test('custom practice turns the user own words into the prompt', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/app/speech');
+    await page.getByRole('button', { name: 'Custom', exact: true }).click();
+
+    // Nothing described yet, so there is nothing to practise.
+    await expect(page.getByTestId('begin-session')).toBeDisabled();
+
+    await page.getByTestId('custom-situation')
+      .fill('i have to explain my robotics project to a professor');
+    await page.getByTestId('begin-session').click();
+    await expect(page.getByTestId('prompt-text'))
+      .toHaveText('I have to explain my robotics project to a professor.');
+    await expect(page.getByTestId('practice-prompt')).toContainText('CUSTOM PRACTICE');
+  });
+
+  test('starting practice moves into a clear listening state', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/app/speech');
+    await page.getByRole('button', { name: 'Introduction', exact: true }).click();
+    await page.getByTestId('begin-session').click();
+    await page.getByTestId('start-practice').click();
+
+    const stage = page.getByTestId('listening-stage');
+    await expect(stage).toBeVisible();
+    // The question stays visible while answering; no metric does.
+    await expect(page.getByTestId('stage-prompt')).not.toBeEmpty();
+    await expect(page.getByTestId('metric-tiles')).toHaveCount(0);
+    await expect(page.getByTestId('timer')).toBeVisible();
+    await expect(page.getByTestId('stop-session')).toBeVisible();
+    await expect(page.locator('.voice-bars i')).not.toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId('practice-prompt')).toBeVisible();
   });
 
   test('how speech is processed is disclosed honestly', async ({ page }) => {
@@ -99,9 +156,22 @@ test.describe('speech practice', () => {
     await page.getByRole('button', { name: /how speech is processed/i }).click();
     const notice = page.locator('.notice').filter({ hasText: 'browser vendor' });
     await expect(notice).toContainText("may send your audio to your browser vendor's service");
-    await expect(notice).toContainText('runs locally');
+    await expect(notice).toContainText('computed in this page');
   });
 
+  test('no prototype or medical language is on the practice screens', async ({ page }) => {
+    await signUp(page);
+    for (const path of ['/app/speech', '/dashboard', '/app/speech/history']) {
+      await page.goto(path);
+      const body = (await page.locator('body').innerText()).toLowerCase();
+      for (const word of ['hackathon', 'placeholder pipelines', 'disorder', 'diagnos', 'therapy', 'treatment']) {
+        expect(body, `${word} on ${path}`).not.toContain(word);
+      }
+    }
+  });
+});
+
+test.describe('personalization from real history', () => {
   test('fewer than three same-scenario sessions refuses to claim a pattern', async ({ page }) => {
     await signUp(page);
     await page.goto('/app/speech/history');
@@ -134,52 +204,56 @@ test.describe('speech practice', () => {
     await expect(page.locator('.next-practice')).toContainText('14 pauses');
   });
 
-  test('turning off store_transcripts redacts the transcript in history', async ({ page }) => {
+  test('interview history steers the interview question, not the conversation one', async ({ page }) => {
     await signUp(page);
-    await page.goto('/settings');
-    await page.getByTestId('store-transcripts').uncheck();
-    await expect(page.getByTestId('saved-notice')).toBeVisible();
-
     await page.goto('/app/speech');
-    await page.getByRole('button', { name: 'Introduction' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
+    // Eight interview sessions: enough history to have moved past question one.
+    await seedSpeechSessions(page, Array.from({ length: 8 }, (_, i) => ({
+      scenario: 'interview',
+      duration_ms: 60000,
+      words_per_minute: 120,
+      pause_count: 3,
+      repetition_count: 1,
+      filler_count: 9,
+      daysAgo: i + 1,
+    })));
+    await page.reload();
+
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
     await page.getByTestId('begin-session').click();
-    await page.getByTestId('manual-transcript').fill('this text must never reach storage');
-    await page.getByTestId('stop-session').click();
-    await expect(page.getByText('STORE TRANSCRIPTS IS OFF')).toBeVisible();
-    await page.getByTestId('save-session').click();
-    await page.waitForURL('**/app/speech/history**');
+    const withHistory = await page.getByTestId('prompt-text').textContent();
 
-    await expect(page.getByText('TRANSCRIPT NOT STORED')).toBeVisible();
-    const stored = await page.evaluate(() =>
-      localStorage.getItem('insign.local.speech_sessions') ?? '');
-    expect(stored).not.toContain('must never reach storage');
-
-    await page.locator('.session-row').first().click();
-    await expect(page.getByTestId('detail-transcript-redacted')).toBeVisible();
-  });
-
-  test('a custom filler list changes what is counted', async ({ page }) => {
-    await signUp(page);
-    await page.goto('/settings');
-    await page.getByTestId('filler-words').fill('sort of, honestly');
-    await page.getByTestId('filler-words').blur();
-    await expect(page.getByTestId('saved-notice')).toBeVisible();
-
+    // A scenario with no history of its own is untouched by it.
     await page.goto('/app/speech');
-    await page.getByRole('button', { name: 'Custom' }).click();
-    await page.getByRole('button', { name: /type my transcript/i }).click();
+    await page.getByRole('button', { name: 'Presentation', exact: true }).click();
     await page.getByTestId('begin-session').click();
-    await page.getByTestId('manual-transcript').fill('um honestly it was sort of fine honestly');
-    // "um" is no longer in the list; "honestly" ×2 and "sort of" ×1 are.
-    await expect(page.getByTestId('metric-fillers')).toHaveText('3');
-  });
+    const fresh = await page.getByTestId('prompt-text').textContent();
 
+    expect(withHistory).not.toBe(fresh);
+    expect(withHistory!.trim().length).toBeGreaterThan(10);
+  });
+});
+
+test.describe('layout', () => {
   test('the app shell has no horizontal overflow', async ({ page }) => {
     await signUp(page);
     for (const path of ['/dashboard', '/app/speech', '/app/speech/history', '/settings']) {
       await page.goto(path);
       await expectNoHorizontalOverflow(page);
     }
+  });
+
+  test('the prepare and listening screens fit every viewport', async ({ page }) => {
+    await signUp(page);
+    await page.goto('/app/speech');
+    await page.getByRole('button', { name: 'Interview', exact: true }).click();
+    await page.getByTestId('begin-session').click();
+    await expectNoHorizontalOverflow(page);
+
+    await page.getByTestId('start-practice').click();
+    await expect(page.getByTestId('listening-stage')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    // Stop stays reachable without scrolling sideways at any width.
+    await expect(page.getByTestId('stop-session')).toBeInViewport();
   });
 });

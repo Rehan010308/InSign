@@ -1,11 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSignPipeline, signLabel } from '../features/sign/useSignPipeline';
+import { useSignPipeline, signLabel, type SignCandidate } from '../features/sign/useSignPipeline';
 import { SIGN_IDS, SIGN_LABELS, TEMPLATES } from '../lib/sign/classifierTemplates';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../services/authService';
 import { getPreferences, saveSignSession } from '../services/sessionService';
 import RootErrorBoundary from '../components/RootErrorBoundary';
 import { DEFAULT_PREFERENCES } from '../types';
+
+/**
+ * What the recognition panel says, and why.
+ *
+ * The rule the whole screen is built around: below the gate, nothing is
+ * claimed. A candidate the classifier is unsure of is shown as a candidate and
+ * named as one — it never appears as the recognised sign.
+ */
+function statusCopy(candidate: SignCandidate, hasCamera: boolean): { headline: string; note: string } {
+  if (!hasCamera) return { headline: '—', note: 'CAMERA OFF' };
+  switch (candidate.status) {
+    case 'committed':
+      return { headline: signLabel(candidate.sign ?? ''), note: 'STABLE' };
+    case 'holding':
+      return {
+        headline: signLabel(candidate.sign ?? ''),
+        note: 'HOLD POSITION — CONFIRMING',
+      };
+    case 'uncertain':
+      return {
+        headline: 'UNCERTAIN',
+        note: candidate.sign
+          ? `CLOSEST: ${signLabel(candidate.sign)} — NOT CONFIDENT ENOUGH TO COMMIT`
+          : 'NOT CONFIDENT ENOUGH TO COMMIT',
+      };
+    default:
+      return { headline: '—', note: 'WAITING FOR A SIGN' };
+  }
+}
 
 function SignStage() {
   const { user } = useAuth();
@@ -15,6 +44,7 @@ function SignStage() {
   const [showVocab, setShowVocab] = useState(false);
   const pipeline = useSignPipeline(threshold, theme === 'light');
   const stageRef = useRef<HTMLDivElement>(null);
+  const traceWrapRef = useRef<HTMLDivElement>(null);
   const savedTokens = useRef(0);
 
   useEffect(() => {
@@ -24,7 +54,7 @@ function SignStage() {
     return () => { alive = false; };
   }, [user]);
 
-  // Keep the overlay canvas's backing store matched to its box.
+  // Keep both canvases' backing stores matched to their boxes.
   useEffect(() => {
     const canvas = pipeline.canvasRef.current;
     const stage = stageRef.current;
@@ -39,6 +69,21 @@ function SignStage() {
     ro.observe(stage);
     return () => ro.disconnect();
   }, [pipeline.canvasRef]);
+
+  useEffect(() => {
+    const canvas = pipeline.traceRef.current;
+    const wrap = traceWrapRef.current;
+    if (!canvas || !wrap) return;
+    const resize = () => {
+      const r = wrap.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(r.width));
+      canvas.height = Math.max(1, Math.round(r.height));
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [pipeline.traceRef]);
 
   // Save the session's recognised signs when the user leaves the page.
   const tokensRef = useRef(pipeline.tokens);
@@ -57,12 +102,16 @@ function SignStage() {
   }, [user]);
 
   async function endSession() {
+    // Freeze first, then save what was frozen: `stop()` blocks every further
+    // frame and voids any classification still in flight, so the saved session
+    // is exactly what was on screen when the button was pressed.
     const tokens = pipeline.tokens;
+    const duration = pipeline.durationMs;
     pipeline.stop();
     if (user && tokens.length) {
       await saveSignSession(user.id, {
         recognized_signs: tokens,
-        duration_ms: Math.round(pipeline.durationMs),
+        duration_ms: Math.round(duration),
       });
       savedTokens.current = tokens.length;
       setSaved(`Saved ${tokens.length} recognised sign${tokens.length === 1 ? '' : 's'}.`);
@@ -70,7 +119,13 @@ function SignStage() {
   }
 
   const stageIdle = pipeline.cameraState !== 'live';
+  // "Frames are flowing" is not the same as "the render loop is running": the
+  // test harness drives frames with the loop paused, and the readouts below
+  // describe the frames, not the loop.
+  const streaming = pipeline.running || pipeline.handsInView > 0 || pipeline.jitterReduction > 0;
   const decision = pipeline.decision;
+  const candidate = pipeline.candidate;
+  const status = statusCopy(candidate, !stageIdle);
 
   return (
     <div className="wrap stack-lg">
@@ -78,14 +133,16 @@ function SignStage() {
         <p className="overline">SIGN TRANSLATOR</p>
         <h1 className="statement-sm">Your hands aren't perfect. Neither is <em className="serif">ours</em>.</h1>
         <p className="app-hint">
-          Hand landmarks are detected on-device, stabilised with a Kalman filter, and matched against
-          a small set of hand-authored templates. Nothing is uploaded — no video, no landmarks.
+          Hand landmarks are detected on-device, stabilised with a Kalman filter, and matched over
+          time against a small set of hand-authored templates. A sign is only committed once it has
+          held still enough, and for long enough, to be worth committing. Nothing is uploaded — no
+          video, no landmarks.
         </p>
       </header>
 
       <div className="row">
         <span className="badge badge-demo" data-testid="vocab-badge">
-          LIMITED PROTOTYPE VOCABULARY: {SIGN_IDS.length} SIGNS
+          CONTROLLED PROTOTYPE VOCABULARY: {SIGN_IDS.length} SIGNS
         </span>
         <button type="button" className="link-btn micro" aria-expanded={showVocab} onClick={() => setShowVocab(v => !v)}>
           {showVocab ? 'HIDE THE VOCABULARY' : 'SHOW THE VOCABULARY'}
@@ -100,15 +157,17 @@ function SignStage() {
           <div className="panel-head"><h3>What this prototype can recognise</h3></div>
           <ul className="stack" style={{ listStyle: 'none' }}>
             {TEMPLATES.map(t => (
-              <li key={t.id} style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+              <li key={t.id} style={{ display: 'flex', gap: 14, alignItems: 'baseline', flexWrap: 'wrap' }}>
                 <span className="chip" style={{ minWidth: 110 }}>{SIGN_LABELS[t.id]}</span>
                 <span style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{t.description}</span>
+                {t.hands === 2 && <span className="chip">TWO HANDS</span>}
               </li>
             ))}
           </ul>
           <p className="micro" style={{ marginTop: 16 }}>
-            THANK YOU AND GOOD SHARE A HAND SHAPE AND PATH; WITHOUT FACE CONTEXT THEY OFTEN TIE, AND
-            THE CONFIDENCE GATE THEN SHOWS NEITHER RATHER THAN GUESSING.
+            THIS IS A CONTROLLED VOCABULARY, NOT SIGN LANGUAGE TRANSLATION. THANK YOU AND GOOD SHARE A
+            HAND SHAPE AND A DOWNWARD PATH, SO THEY ARE SEPARATED ONLY BY HOW FAR THE HAND TRAVELS —
+            WHEN THAT IS AMBIGUOUS THE GATE SHOWS NEITHER RATHER THAN GUESSING.
           </p>
         </div>
       )}
@@ -171,18 +230,34 @@ function SignStage() {
         </div>
 
         <aside className="stack">
-          <div className="panel">
-            <div className="panel-head"><h3>Confidence</h3></div>
-            <div className="conf-meter">
+          <div className="panel recognition" data-testid="recognition-panel">
+            <div className="panel-head"><h3>Recognised</h3></div>
+            <p className={`recognised-word ${candidate.status}`} data-testid="recognised-word">
+              {status.headline}
+            </p>
+            <p className="micro" data-testid="recognised-status">{status.note}</p>
+
+            <div className="conf-meter" style={{ marginTop: 18 }}>
               <span className="conf-row micro">
-                <span>TOP CANDIDATE</span>
+                <span>CONFIDENCE</span>
                 <span data-testid="confidence-value">
                   {pipeline.candidates[0] ? pipeline.candidates[0].confidence.toFixed(2) : '—'}
                 </span>
               </span>
               <span className="bar"><i style={{ width: `${Math.round((pipeline.candidates[0]?.confidence ?? 0) * 100)}%` }} /></span>
             </div>
-            <p className="micro" style={{ marginTop: 12 }}>GATE AT {threshold.toFixed(2)} · ADJUSTABLE IN SETTINGS</p>
+
+            <div className="conf-meter" style={{ marginTop: 12 }}>
+              <span className="conf-row micro">
+                <span>STABILITY</span>
+                <span data-testid="stability-value">{Math.round(candidate.stability * 100)}%</span>
+              </span>
+              <span className="bar"><i style={{ width: `${Math.round(candidate.stability * 100)}%` }} /></span>
+            </div>
+
+            <p className="micro" style={{ marginTop: 14 }}>
+              GATE AT {threshold.toFixed(2)} · ADJUSTABLE IN SETTINGS
+            </p>
             {pipeline.candidates.length > 1 && (
               <ul className="stack" style={{ listStyle: 'none', marginTop: 14 }}>
                 {pipeline.candidates.map(c => (
@@ -197,9 +272,12 @@ function SignStage() {
           <div className="panel">
             <div className="panel-head"><h3>Session</h3></div>
             <div className="row">
-              {pipeline.running ? (
+              {/* Stop is offered whenever the camera is live. Tying it to the
+                  animation loop would hide it if the loop ever stalled, which
+                  is exactly when a user most wants to turn the camera off. */}
+              {!stageIdle || pipeline.running ? (
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => void endSession()} data-testid="end-session">
-                  End & save
+                  Stop &amp; save
                 </button>
               ) : (
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => void pipeline.enable()}>
@@ -210,21 +288,72 @@ function SignStage() {
                 Clear
               </button>
             </div>
+            {pipeline.frozen && !pipeline.running && (
+              <p className="micro" style={{ marginTop: 12 }} data-testid="frozen-note">
+                RECOGNITION FROZEN — THE CAMERA IS RELEASED AND THE RESULT ABOVE IS FINAL
+              </p>
+            )}
             {saved && <p className="form-notice" role="status" style={{ marginTop: 12 }}>{saved}</p>}
           </div>
         </aside>
       </div>
 
+      <section aria-labelledby="pipeline-h" data-testid="pipeline-strip">
+        <div className="section-head">
+          <p className="overline" id="pipeline-h">THE PIPELINE, LIVE</p>
+          <span className="micro">
+            {pipeline.handsInView === 2 ? 'TWO HANDS IN VIEW' : pipeline.handsInView === 1 ? 'ONE HAND IN VIEW' : 'NO HAND IN VIEW'}
+          </span>
+        </div>
+        <div className="pipe-stages">
+          <div className="pipe-stage">
+            <p className="micro">01 · RAW MOVEMENT</p>
+            <p className="stage-note">21 landmarks per frame, exactly as the detector reported them.</p>
+          </div>
+          <span className="pipe-arrow" aria-hidden="true">→</span>
+          <div className="pipe-stage">
+            <p className="micro">02 · KALMAN STABILIZATION</p>
+            <p className="stage-note" data-testid="jitter-readout">
+              {streaming
+                ? `Absorbing ${(pipeline.jitterReduction * 1000).toFixed(1)} units of jitter per landmark, without lagging the hand.`
+                : 'A constant-velocity filter per coordinate, absorbing tremor without lagging the hand.'}
+            </p>
+          </div>
+          <span className="pipe-arrow" aria-hidden="true">→</span>
+          <div className="pipe-stage">
+            <p className="micro">03 · TEMPORAL CLASSIFIER</p>
+            <p className="stage-note">A 1.2-second window of shape and path, not a single frame.</p>
+          </div>
+          <span className="pipe-arrow" aria-hidden="true">→</span>
+          <div className="pipe-stage">
+            <p className="micro">04 · COMMITTED SIGN</p>
+            <p className="stage-note">Only after the candidate has held, above the confidence gate.</p>
+          </div>
+        </div>
+
+        <div className="trace-panel">
+          <div className="trace-head">
+            <span className="legend-tag"><i />RAW</span>
+            <span className="legend-tag stable"><i />STABILIZED</span>
+            <span className="micro">SAME LANDMARK · SAME FRAMES</span>
+          </div>
+          <div className="trace-canvas" ref={traceWrapRef}>
+            <canvas ref={pipeline.traceRef} data-testid="sign-trace" aria-hidden="true" />
+            {!streaming && (
+              <p className="micro trace-empty">THE TRAJECTORY APPEARS HERE ONCE THE CAMERA IS ON</p>
+            )}
+          </div>
+        </div>
+      </section>
+
       <section aria-labelledby="output-h">
         <div className="section-head">
-          <p className="overline" id="output-h">RECOGNISED</p>
+          <p className="overline" id="output-h">SEQUENCE</p>
         </div>
         <div className="sign-strip" role="status" aria-live="polite" data-testid="sign-strip">
           {pipeline.tokens.length === 0 ? (
             <span className="sign-ghost">
-              {decision?.kind === 'possible'
-                ? `POSSIBLE: ${signLabel(decision.sign ?? '')}? — HOLD THE SIGN TO CONFIRM`
-                : 'NOTHING RECOGNISED YET — SIGNS APPEAR HERE ONCE THEY CLEAR THE CONFIDENCE GATE'}
+              NOTHING COMMITTED YET — SIGNS APPEAR HERE ONCE THEY HOLD ABOVE THE CONFIDENCE GATE
             </span>
           ) : (
             pipeline.tokens.map((t, i) => (
@@ -236,9 +365,10 @@ function SignStage() {
             ))
           )}
         </div>
-        {decision?.kind === 'possible' && pipeline.tokens.length > 0 && (
-          <p className="sign-ghost" style={{ marginTop: 12 }} data-testid="possible-hint">
-            POSSIBLE: {signLabel(decision.sign ?? '')}? — HOLD THE SIGN TO CONFIRM
+        {pipeline.tokens.length > 0 && (
+          <p className="micro" style={{ marginTop: 12 }}>
+            A SIGN IS ONLY ADDED AFTER IT HAS HELD; THE SAME SIGN HAS TO BE RELEASED AND MADE AGAIN
+            BEFORE IT CAN REPEAT
           </p>
         )}
       </section>

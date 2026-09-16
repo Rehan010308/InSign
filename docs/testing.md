@@ -15,14 +15,17 @@ works (it falls back to the CDN) but the suite then depends on the network.
 
 ## Unit tests — `tests/unit/`
 
-71 tests over the modules that have no DOM in them at all.
+177 tests over the modules that have no DOM in them at all.
 
 | File | What it pins down |
 | --- | --- |
-| `metrics.test.ts` | exact WPM, pause, repetition and filler counts on fixed fixtures, for both the spoken and the typed path |
+| `metrics.test.ts` | exact WPM, pause, repetition and filler counts on fixed fixtures; whole-token filler matching ("umbrella" is not an "um"), multi-word fillers, capitalisation and punctuation |
+| `speechTiming.test.ts` | the pace regression suite: zero and near-zero durations, the 54,000 WPM case, restarts, a final result arriving during Stop, and pause detection at, under and over the 800 ms threshold |
+| `coach.test.ts` | baseline mode under three sessions, scenario-specific profiles, trends, measurable targets, target comparison, drill adaptation, and that nothing it can say is a diagnosis |
+| `questionBank.test.ts` | every scenario has questions with valid metadata, selection is deterministic, a sitting does not repeat a question, and Custom builds a prompt from the user's own words |
 | `kalman.test.ts` | the filter halves the error against the intended trajectory of a trembling hand, still tracks a 2 Hz movement, and does not lag a ramp |
-| `normalizer.test.ts` | wrist at the origin, unit scale, rotation aligned, and invariance to position/size/tilt |
-| `classifier.test.ts` | each unambiguous sign is recognised from its canonical sequence; an unknown movement returns nothing; tremor does not break recognition; THANK YOU/GOOD stay an honest tie |
+| `normalizer.test.ts` | wrist at the origin, unit scale, rotation aligned, invariance to position/size/tilt; the curl and gap features that separate a flat hand from an open palm; and that fifteen agreeing features cannot hide one that is badly wrong |
+| `classifier.test.ts` | each sign is recognised from its canonical sequence and from an imperfect handshape; the SORRY/PLEASE/GOOD false positives (a fist circle is not PLEASE, a thumb-up circle is not SORRY, a still hand is not GOOD); that neither a perfect pose nor a perfect motion can rescue the other; distance and noise tolerance; and that the two-handed sign needs both hands while one-handed signs ignore the second |
 | `personalization.test.ts` | the full decision table — no history, under three sessions, outside the 14-day window, each of the four patterns, the consistent-sessions case, and determinism |
 | `contextEngine.test.ts` | the three outcomes, the bigram tie-break, and that no sign can be invented |
 
@@ -38,14 +41,14 @@ hands is the work a trained model takes over (see `docs/classifier.md`).
 
 ## End-to-end tests — `tests/e2e/`
 
-230 tests: five viewports (1920×1080, 1440×900, 1366×768, 768×1024, 390×844)
+Five viewports (1920×1080, 1440×900, 1366×768, 768×1024, 390×844)
 against the dev server, with Chromium's fake camera and microphone.
 
 | Spec | Covers |
 | --- | --- |
 | `landing.spec.ts` | the nine chapters render, nav anchors land below the sticky bar, Try InSign routes to sign-up, the theme toggle flips/persists/notifies the background canvas, the canvases actually paint non-zero pixels, the contact mailto is ≤20px, no horizontal overflow, zero console errors |
-| `speech.spec.ts` | protected routes redirect with `next`, sign-up/in/out, inline form errors, a typed transcript producing **exact** metric values, empty-save refusal, the processing disclosure, the <3-session refusal, the ≥3-session recommendation (matching the unit fixture's numbers), transcript redaction when store_transcripts is off, a custom filler list |
-| `sign.spec.ts` | the camera is only requested on request, video + overlay start, a recognised sign reaches the strip, RAW and STABILIZED are both painted, an unknown movement is refused, no-hand and two-hand states, Clear, camera tracks end on route leave, the vocabulary list |
+| `speech.spec.ts` | protected routes redirect with `next`, sign-up/in/out, inline form errors, each scenario opening its own kind of practice (interview questions, presentation prompts, phone-call situations with a task, custom from the user's words), the question progress indicator, the listening state showing no metrics, the processing disclosure, the <3-session refusal, the ≥3-session recommendation (matching the unit fixture's numbers), that history steers question selection, and that no prototype or medical language survives |
+| `sign.spec.ts` | the camera is only requested on request, video + overlay start, a recognised sign reaches the strip, RAW and STABILIZED are both painted and the trace is drawn from real landmark data, an unknown movement is refused as UNCERTAIN, no-hand and two-hand states, **Stop freezes recognition so later frames cannot change the result**, Stop releases the camera, a held sign commits once rather than once per pass, the two-handed sign needs both hands, sequence order, Clear, camera tracks end on route leave, the vocabulary list |
 | `accessibility.spec.ts` | landmarks and heading order, one h1 per page, skip link first, keyboard-only reach, visible focus rings, live regions, contrast in both themes, text alternatives for the visualisations |
 | `screenshots.spec.ts` | the visual QA pass (below) — not an assertion suite |
 
