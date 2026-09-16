@@ -1,0 +1,4 @@
+/* The InSign design system — the landing stylesheet, unchanged. */
+@import './styles/style.css';
+/* App surfaces — same tokens, no second design system. */
+@import './styles/app.css';

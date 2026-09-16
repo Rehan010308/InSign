@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export default function LandingFooter() {
+    return (_jsx("footer", { children: _jsxs("div", { className: "wrap frow", children: [_jsxs("div", { children: [_jsxs("a", { className: "fbrand", href: "#hero", children: [_jsx("span", { className: "mark", "aria-hidden": "true" }), "InSign"] }), _jsx("p", { className: "ftag", children: "Technology should adapt to how you communicate." })] }), _jsxs("nav", { className: "fnav", "aria-label": "Footer", children: [_jsx("a", { href: "#speech", children: "SPEECH" }), _jsx("a", { href: "#sign", children: "SIGN" }), _jsx("a", { href: "#philosophy", children: "PHILOSOPHY" }), _jsx("a", { href: "#contact", children: "CONTACT" })] }), _jsx("a", { className: "fmail", href: "mailto:rehan.badar0103@gmail.com", children: "REHAN.BADAR0103@GMAIL.COM" })] }) }));
+}
