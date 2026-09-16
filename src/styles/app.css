@@ -53,7 +53,12 @@ body.in-app { background: var(--bg); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .panel h2, .panel h3 { font-size: 19px; font-weight: 500; letter-spacing: -0.01em; }
 .panel p { color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
-.panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+/* .panel p would otherwise out-specify .micro and blow mono labels up to 15px */
+.panel p.micro, .panel .micro {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+  color: var(--text-tertiary); line-height: 1.6;
+}
+.panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .stack-lg > * + * { margin-top: 44px; }
 .stack > * + * { margin-top: 18px; }
 
@@ -141,8 +146,9 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 .next-practice { border-left: 2px solid var(--accent); }
 .next-practice h3 { font-size: 17px; line-height: 1.5; font-weight: 500; margin-bottom: 10px; }
 .evidence { font-size: 13px; color: var(--text-tertiary); line-height: 1.6; }
-.activity { display: flex; gap: 8px; align-items: flex-end; height: 64px; margin-top: 14px; }
-.activity .wk { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.activity { display: flex; gap: 8px; align-items: stretch; height: 72px; margin-top: 14px; }
+/* Bars grow up from a shared baseline; the week label sits under it. */
+.activity .wk { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 8px; }
 .activity .bar-fill {
   width: 100%; background: var(--accent-dim); border-top: 2px solid var(--accent);
   border-radius: 2px 2px 0 0; min-height: 2px;
@@ -184,6 +190,7 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 }
 
 .practice-stage { display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: start; }
+.practice-stage > div > * + * { margin-top: 18px; }
 .practice-controls { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
 .timer { font-family: var(--font-mono); font-size: 30px; letter-spacing: .04em; color: var(--text-primary); }
 .state-chip {
