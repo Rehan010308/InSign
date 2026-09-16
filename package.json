@@ -1,0 +1,10 @@
+{
+  "name": "insign",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InSign — Technology should adapt to how you communicate. Zero-dependency frontend prototype.",
+  "scripts": {
+    "start": "node site/server.js",
+    "dev": "node site/server.js"
+  }
+}

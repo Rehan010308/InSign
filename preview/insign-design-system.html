@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>InSign — Design System Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  /* ===== InSign design tokens — docs/02-design-system.md ===== */
+  :root{
+    --ink-1000:#0A0A0B; --surface-1:#111113; --surface-2:#17171A; --surface-3:#1E1E22;
+    --hairline:rgba(255,255,255,0.08); --hairline-strong:rgba(255,255,255,0.16);
+    --text-primary:#F5F4F1; --text-secondary:#A3A3AB; --text-tertiary:#6E6E76; --text-inverse:#0A0A0B;
+    --accent:#E8A33D; --accent-strong:#F2B45A; --accent-deep:#C9862B; --accent-dim:rgba(232,163,61,0.14);
+    --state-recording:#E5484D; --state-success:#5FBF7A; --state-danger:#E5484D;
+    --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-full:999px;
+    --ease-out:cubic-bezier(0.22,1,0.36,1); --ease-soft:cubic-bezier(0.65,0,0.35,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--ink-1000);color:var(--text-primary);
+    font-family:Geist,Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  ::selection{background:var(--accent-dim);color:var(--text-primary)}
+  .mono{font-family:'Geist Mono',ui-monospace,Consolas,monospace}
+  .serif{font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-weight:400}
+
+  /* ===== layout ===== */
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+  section{padding:96px 0;border-top:1px solid var(--hairline)}
+  section:first-of-type{border-top:none}
+  .overline{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--text-tertiary);margin-bottom:40px}
+  .overline b{color:var(--accent);font-weight:400}
+  .overline-sm{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--text-tertiary)}
+  .micro{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.06em;color:var(--text-tertiary)}
+
+  /* ===== type scale ===== */
+  .display-1{font-size:clamp(56px,9vw,118px);line-height:0.98;font-weight:500;letter-spacing:-0.035em}
+  .display-2{font-size:clamp(40px,6vw,72px);line-height:1.02;font-weight:500;letter-spacing:-0.03em}
+  .h1{font-size:clamp(32px,4vw,48px);line-height:1.1;font-weight:600;letter-spacing:-0.02em}
+  .h2{font-size:28px;line-height:1.28;font-weight:600;letter-spacing:-0.015em}
+  .h3{font-size:20px;line-height:1.4;font-weight:600;letter-spacing:-0.01em}
+  .body-lg{font-size:18px;line-height:1.55;color:var(--text-secondary)}
+  .body{font-size:15px;line-height:1.6;color:var(--text-secondary)}
+  .label{font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:0.08em;font-weight:500}
+
+  /* ===== buttons ===== */
+  .btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 22px;border-radius:var(--r-md);
+    font-family:'Geist Mono',monospace;font-size:13px;letter-spacing:0.08em;font-weight:500;cursor:pointer;
+    border:1px solid transparent;transition:all 150ms var(--ease-out);text-decoration:none;background:none}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn-primary{background:var(--text-primary);color:var(--text-inverse)}
+  .btn-primary:hover{background:#FFFFFF;transform:translateY(-2px)}
+  .btn-accent{background:var(--accent);color:var(--text-inverse)}
+  .btn-accent:hover{background:var(--accent-strong);transform:translateY(-2px)}
+  .btn-secondary{border-color:var(--hairline);color:var(--text-primary)}
+  .btn-secondary:hover{border-color:var(--hairline-strong);background:var(--surface-2)}
+  .btn-ghost{color:var(--text-tertiary);padding:0 14px}
+  .btn-ghost:hover{color:var(--text-primary)}
+  .btn-danger{color:var(--state-danger);border-color:var(--hairline)}
+  .btn-danger:hover{border-color:var(--state-danger)}
+  .btn-sm{height:36px;padding:0 16px}
+  .btn-lg{height:52px;padding:0 28px}
+  .btn .arrow{transition:transform 150ms var(--ease-out)}
+  .btn:hover .arrow{transform:translateX(4px)}
+
+  /* ===== cards ===== */
+  .card{background:var(--surface-1);border:1px solid var(--hairline);border-radius:var(--r-lg);
+    padding:28px;box-shadow:0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.06)}
+  .card-interactive{transition:transform 150ms var(--ease-out), border-color 150ms, box-shadow 150ms}
+  .card-interactive:hover{transform:translateY(-2px);border-color:var(--hairline-strong);
+    box-shadow:0 8px 24px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.06)}
+
+  /* ===== inputs ===== */
+  .field{margin-bottom:20px}
+  .field label{display:block;font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px}
+  .field input,.field select{width:100%;height:44px;padding:0 14px;background:var(--surface-2);
+    border:1px solid var(--hairline);border-radius:var(--r-md);color:var(--text-primary);
+    font-family:inherit;font-size:15px;transition:border-color 150ms}
+  .field input::placeholder{color:var(--text-tertiary)}
+  .field input:hover,.field select:hover{border-color:var(--hairline-strong)}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+  .field .hint{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.06em;
+    color:var(--text-tertiary);margin-top:6px}
+  .field .hint[role="alert"]{color:var(--state-danger)}
+  .field.invalid input{border-color:var(--state-danger)}
+
+  /* ===== badges / dots ===== */
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--hairline);
+    border-radius:var(--r-sm);font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.06em;
+    color:var(--text-secondary)}
+  .badge-accent{background:var(--accent-dim);border-color:transparent;color:var(--accent)}
+  .badge-demo{color:var(--text-tertiary)}
+  .statusdot{width:8px;height:8px;border-radius:var(--r-full);display:inline-block}
+
+  /* ===== meters ===== */
+  .meter{margin:16px 0}
+  .meter-meta{display:flex;justify-content:space-between;margin-bottom:8px;
+    font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.06em;color:var(--text-tertiary)}
+  .meter-track{height:4px;background:var(--hairline);border-radius:var(--r-full);position:relative}
+  .meter-fill{height:100%;border-radius:var(--r-full);background:var(--text-primary);
+    width:0;transition:width 700ms var(--ease-out)}
+  .meter-fill.accent{background:var(--accent)}
+  .meter-ticks{position:absolute;inset:0;display:flex;justify-content:space-between;pointer-events:none}
+  .meter-ticks span{width:1px;background:var(--hairline-strong);height:100%}
+
+  /* ===== ring meter ===== */
+  .ring{transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:2}
+  .ring .track{stroke:var(--hairline)}
+  .ring .fill{stroke:var(--accent);stroke-linecap:round;
+    stroke-dasharray:283;stroke-dashoffset:calc(283 * (1 - var(--p) / 100))}
+
+  /* ===== waveform ===== */
+  .wave{display:flex;align-items:center;gap:3px;height:56px}
+  .wave span{width:3px;border-radius:2px;background:rgba(245,244,241,0.25);
+    animation:breathe 4s ease-in-out infinite}
+  .wave.live span{background:var(--accent)}
+  @keyframes breathe{0%,100%{height:20%}50%{height:90%}}
+  @media (prefers-reduced-motion: reduce){
+    .wave span{animation:none;height:50%}
+    html{scroll-behavior:auto}
+    .meter-fill{transition:none}
+  }
+
+  /* ===== tokens grid ===== */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .swatch{border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface-1)}
+  .swatch .chip{height:64px;border-bottom:1px solid var(--hairline)}
+  .swatch .sw-body{padding:12px}
+  .swatch .sw-name{font-family:'Geist Mono',monospace;font-size:11px;letter-spacing:0.06em;color:var(--text-primary)}
+  .swatch .sw-val{font-family:'Geist Mono',monospace;font-size:10px;color:var(--text-tertiary);margin-top:2px}
+
+  /* ===== helpers ===== */
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+  .spec{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+    padding:12px 0;border-bottom:1px solid var(--hairline)}
+  .spec:last-child{border-bottom:none}
+  .spec dt{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:0.08em;color:var(--text-tertiary)}
+  .spec dd{text-align:right;color:var(--text-primary)}
+
+  header.site{position:sticky;top:0;z-index:10;background:rgba(10,10,11,0.72);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--hairline)}
+  header.site .bar{display:flex;align-items:center;justify-content:space-between;height:56px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:500;letter-spacing:-0.01em}
+  .logo .dot{width:10px;height:10px;background:var(--accent);border-radius:2px;flex:none}
+  nav.top a{color:var(--text-secondary);text-decoration:none;font-family:'Geist Mono',monospace;
+    font-size:12px;letter-spacing:0.08em;margin-left:28px;transition:color 150ms}
+  nav.top a:hover{color:var(--text-primary)}
+  .skip{position:absolute;left:-9999px}
+  .skip:focus{left:24px;top:16px;z-index:99;background:var(--surface-2);padding:10px 16px;
+    border-radius:var(--r-md);border:1px solid var(--accent);outline:none}
+  @media(max-width:640px){nav.top{display:none}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap bar">
+    <div class="logo"><span class="dot"></span>InSign&nbsp;<span class="micro">DESIGN SYSTEM</span></div>
+    <nav class="top" aria-label="Design system sections">
+      <a href="#tokens">Tokens</a><a href="#type">Type</a><a href="#components">Components</a>
+      <a href="#patterns">Patterns</a><a href="#motion">Motion</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="wrap">
+
+  <!-- ======== 01 HERO ======== -->
+  <section style="padding:140px 0 120px;border-top:none">
+    <p class="overline">01 — <b>DESIGN SYSTEM</b></p>
+    <h1 class="display-1" style="max-width:14ch">Technology should <em class="serif">adapt</em> to how you communicate.</h1>
+    <p class="body-lg" style="max-width:52ch;margin-top:28px">
+      The InSign design language: a rigid grid — the machine — bent by human signal — the person.
+      Ink canvas, hairline rules, one amber accent, earned and never scattered.</p>
+    <div class="row" style="margin-top:40px">
+      <a class="btn btn-primary btn-lg" href="#components">Explore the system <span class="arrow">→</span></a>
+      <a class="btn btn-secondary btn-lg" href="#tokens">See the tokens</a>
+      <span class="badge badge-demo">STATIC PREVIEW — NO BACKEND</span>
+    </div>
+  </section>
+
+  <!-- ======== 02 TOKENS ======== -->
+  <section id="tokens">
+    <p class="overline">02 — <b>TOKENS</b></p>
+    <h2 class="display-2">One accent, <em class="serif">earned</em>.</h2>
+    <p class="body-lg" style="max-width:52ch;margin:28px 0 48px">
+      Every color below is a contract from <span class="mono">docs/02-design-system.md</span>.
+      Nothing off-system appears anywhere in the product.</p>
+    <h3 class="h3" style="margin-bottom:20px">Color — ink canvas, warm white, one signal amber</h3>
+    <div class="swatches" id="swatches"></div>
+  </section>
+
+  <!-- ======== 03 TYPE ======== -->
+  <section id="type">
+    <p class="overline">03 — <b>TYPE</b></p>
+    <h2 class="display-2">Instrumented <em class="serif">type</em>.</h2>
+    <p class="body-lg" style="max-width:52ch;margin:28px 0 48px">
+      Geist for UI, Instrument Serif italic for the single human word, Geist Mono for data.
+      Two visible weights per region: 500/600 and 400.</p>
+    <div class="grid2" style="align-items:start">
+      <div class="card">
+        <div class="spec"><dt>display-1 · 56→118</dt>
+          <dd style="font-size:clamp(36px,6vw,72px);line-height:1;font-weight:500;letter-spacing:-0.035em">Aa</dd></div>
+        <div class="spec"><dt>display-2 · 40→72</dt>
+          <dd style="font-size:clamp(28px,4vw,52px);line-height:1.05;font-weight:500;letter-spacing:-0.03em">Bb</dd></div>
+        <div class="spec"><dt>h1 · 32→48 · 600</dt><dd style="font-size:38px;line-height:1.1;font-weight:600">Cc</dd></div>
+        <div class="spec"><dt>h2 / h3 · 600</dt><dd>
+          <span style="font-size:28px;font-weight:600">Dd</span>
+          <span style="font-size:20px;font-weight:600;margin-left:16px">Ee</span></dd></div>
+        <div class="spec"><dt>label · mono 13</dt><dd class="label">0123456789 →</dd></div>
+        <div class="spec"><dt>overline · mono 12</dt><dd class="overline-sm" style="margin:0">04 — SPEECH COMPANION</dd></div>
+        <div class="spec"><dt>micro · mono 11</dt><dd class="micro" style="margin:0">DEMO DATA · 00:00</dd></div>
+      </div>
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:14px">RULES</p>
+        <ul class="body" style="padding-left:18px;display:grid;gap:10px">
+          <li>One italic serif word per major statement — <em class="serif" style="color:var(--text-primary);font-size:17px">adapt</em></li>
+          <li>Max two weights per screen region</li>
+          <li>Few words, huge type, immense whitespace</li>
+          <li>Mono uppercase overlines carry chapter indices</li>
+          <li>Body text is never animated</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== 04 COMPONENTS ======== -->
+  <section id="components">
+    <p class="overline">04 — <b>COMPONENTS</b></p>
+    <h2 class="display-2">Instrument, <em class="serif">not</em> illustration.</h2>
+    <p class="body-lg" style="max-width:52ch;margin:28px 0 48px">
+      Calibrated meters, disciplined buttons, honest badges. No spinners anywhere in the product.</p>
+    <div class="grid2">
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:18px">BUTTONS</p>
+        <div class="row" style="margin-bottom:14px">
+          <button class="btn btn-primary">Explore InSign <span class="arrow">→</span></button>
+          <button class="btn btn-accent">Start recording</button>
+        </div>
+        <div class="row" style="margin-bottom:14px">
+          <button class="btn btn-secondary">See how it works</button>
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-danger">Delete session</button>
+        </div>
+        <div class="row">
+          <button class="btn btn-secondary btn-sm">SM 36</button>
+          <button class="btn btn-secondary">MD 44</button>
+          <button class="btn btn-secondary btn-lg">LG 52</button>
+        </div>
+        <p class="micro" style="margin-top:16px">MAGNETIC HOVER ON LG · ARROW SLIDES 4PX · PRESS SCALE 0.99</p>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:18px">FIELD PATTERNS</p>
+        <div class="field">
+          <label for="f-email">Email</label>
+          <input id="f-email" type="email" placeholder="you@university.edu" autocomplete="email" aria-describedby="f-email-hint">
+          <p class="hint" id="f-email-hint">USED ONLY FOR YOUR ACCOUNT</p>
+        </div>
+        <div class="field invalid">
+          <label for="f-pw">Password</label>
+          <input id="f-pw" type="password" value="••••" aria-describedby="f-pw-err">
+          <p class="hint" id="f-pw-err" role="alert">PASSWORD MUST BE 8+ CHARACTERS</p>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label for="f-scenario">Scenario</label>
+          <select id="f-scenario">
+            <option>Interview</option><option>Presentation</option><option>Phone Call</option>
+          </select>
+          <p class="hint">DEFAULT: INTERVIEW</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:6px">METERS — THE SIGNATURE DATA COMPONENT</p>
+        <div class="meter">
+          <p class="meter-meta"><span>INTERVIEW</span><span>HIGH</span></p>
+          <div class="meter-track">
+            <div class="meter-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="meter-fill" data-w="86%"></div>
+          </div>
+        </div>
+        <div class="meter">
+          <p class="meter-meta"><span>PRESENTATION</span><span>MEDIUM</span></p>
+          <div class="meter-track">
+            <div class="meter-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="meter-fill" data-w="52%"></div>
+          </div>
+        </div>
+        <div class="meter">
+          <p class="meter-meta"><span>CONVERSATION</span><span>LOW</span></p>
+          <div class="meter-track">
+            <div class="meter-ticks"><span></span><span></span><span></span><span></span><span></span></div>
+            <div class="meter-fill" data-w="24%"></div>
+          </div>
+        </div>
+        <div class="meter" style="margin-bottom:8px">
+          <p class="meter-meta"><span>NEXT SESSION</span><span style="color:var(--accent)">INTERVIEW — RECOMMENDED</span></p>
+          <div class="meter-track"><div class="meter-fill accent" data-w="86%"></div></div>
+        </div>
+        <div class="row">
+          <span class="badge badge-accent">RECOMMENDED</span>
+          <span class="badge badge-demo">DEMO DATA</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:6px">RING METER &amp; STATUS</p>
+        <div class="row" style="align-items:center;gap:28px;margin-top:14px">
+          <svg class="ring" width="96" height="96" viewBox="0 0 96 96" style="--p:75" role="img" aria-label="Weekly goal 75 percent complete">
+            <circle class="track" cx="48" cy="48" r="45"></circle>
+            <circle class="fill" cx="48" cy="48" r="45"></circle>
+          </svg>
+          <div>
+            <p class="h3" style="font-size:24px">75%</p>
+            <p class="micro">WEEKLY GOAL — 3 OF 4 SESSIONS</p>
+            <div class="row" style="margin-top:12px">
+              <span class="badge"><span class="statusdot" style="background:var(--state-success)"></span>TRACKING</span>
+              <span class="badge"><span class="statusdot" style="background:var(--accent)"></span>RECOGNIZED</span>
+              <span class="badge"><span class="statusdot" style="background:var(--state-recording)"></span>RECORDING</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======== 05 PATTERNS ======== -->
+  <section id="patterns">
+    <p class="overline">05 — <b>PATTERNS</b></p>
+    <h2 class="display-2">The grid bends to <em class="serif">you</em>.</h2>
+    <p class="body-lg" style="max-width:52ch;margin:28px 0 48px">
+      Landing chapters enact the philosophy; the app stays clean and spacious.
+      Any panel showing placeholder results carries the DEMO DATA badge.</p>
+    <div class="grid3">
+
+      <div class="card card-interactive">
+        <p class="overline-sm">PRODUCT 01</p>
+        <h3 class="h3" style="margin:8px 0 6px">Speech Companion</h3>
+        <p class="body">Practice real-world communication.</p>
+        <div class="wave" style="margin-top:20px" aria-hidden="true">
+          <span style="animation-delay:0s"></span><span style="animation-delay:.15s"></span>
+          <span style="animation-delay:.3s"></span><span style="animation-delay:.45s"></span>
+          <span style="animation-delay:.6s"></span><span style="animation-delay:.75s"></span>
+          <span style="animation-delay:.9s"></span><span style="animation-delay:1.05s"></span>
+          <span style="animation-delay:1.2s"></span><span style="animation-delay:1.35s"></span>
+          <span style="animation-delay:1.5s"></span><span style="animation-delay:1.65s"></span>
+          <span style="animation-delay:1.8s"></span><span style="animation-delay:1.95s"></span>
+        </div>
+        <p class="micro" style="margin-top:10px">TYPICAL: 3–5 MIN</p>
+      </div>
+
+      <div class="card card-interactive">
+        <p class="overline-sm">PRODUCT 02</p>
+        <h3 class="h3" style="margin:8px 0 6px">Sign Translator</h3>
+        <p class="body">Translate signs through your camera.</p>
+        <svg width="100%" height="56" viewBox="0 0 240 56" preserveAspectRatio="none"
+             style="margin-top:20px" role="img" aria-label="Raw trajectory stabilizing into a smooth path">
+          <path d="M4 46 C 28 44, 44 30, 66 34 S 110 18, 134 26 S 190 10, 236 14"
+                fill="none" stroke="rgba(245,244,241,0.25)" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <path d="M4 46 C 28 44, 44 30, 66 34 S 110 18, 134 26 S 190 10, 236 14"
+                fill="none" stroke="#E8A33D" stroke-width="2"/>
+        </svg>
+        <p class="micro" style="margin-top:10px">RAW → STABLE · RECOGNISED: "THANK YOU"</p>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm">ADAPTIVE PLAN</p>
+        <h3 class="h3" style="margin:8px 0 10px">Next session: Interview</h3>
+        <p class="body">Hardest scenario in your last three sessions — next session starts with shorter prompts.</p>
+        <div class="row" style="margin-top:16px">
+          <span class="badge badge-accent">RECOMMENDED</span>
+          <span class="badge badge-demo">DEMO DATA</span>
+        </div>
+        <p class="micro" style="margin-top:16px">PRACTICE → LEARN → ADAPT</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======== 06 MOTION ======== -->
+  <section id="motion">
+    <p class="overline">06 — <b>MOTION</b></p>
+    <h2 class="display-2">Motion must <em class="serif">mean</em>.</h2>
+    <p class="body-lg" style="max-width:52ch;margin:28px 0 48px">
+      Every animation tells the adaptation story: disordered → organized, raw → stable, generic → personal.</p>
+    <div class="grid3">
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:8px">CURVES &amp; DURATIONS</p>
+        <div class="spec"><dt>ease-out-quint</dt><dd class="mono" style="font-size:13px">0.22, 1, 0.36, 1</dd></div>
+        <div class="spec"><dt>ease-in-out-soft</dt><dd class="mono" style="font-size:13px">0.65, 0, 0.35, 1</dd></div>
+        <div class="spec"><dt>fast / med / slow</dt><dd class="mono" style="font-size:13px">150 / 350 / 700ms</dd></div>
+        <div class="spec"><dt>cinema</dt><dd class="mono" style="font-size:13px">1100ms</dd></div>
+        <div class="spec"><dt>loop</dt><dd class="mono" style="font-size:13px">4–8s ambient</dd></div>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:14px">MICROINTERACTIONS</p>
+        <ul class="body" style="padding-left:18px;display:grid;gap:10px">
+          <li>Magnetic hover on primary CTAs (desktop)</li>
+          <li>Cards: −2px lift + border-strong</li>
+          <li>Waveform breathes at idle, amber when live</li>
+          <li>Timer digits flip, 150ms y-slide</li>
+          <li>Navbar shrinks at 80px scroll</li>
+        </ul>
+        <p class="micro" style="margin-top:14px">ALL DISABLED UNDER REDUCED MOTION</p>
+      </div>
+
+      <div class="card">
+        <p class="overline-sm" style="margin-bottom:6px">LOADING — NO SPINNERS</p>
+        <div class="wave" style="margin:12px 0" aria-hidden="true">
+          <span style="animation-delay:0s"></span><span style="animation-delay:.2s"></span>
+          <span style="animation-delay:.4s"></span><span style="animation-delay:.6s"></span>
+          <span style="animation-delay:.8s"></span><span style="animation-delay:1s"></span>
+          <span style="animation-delay:1.2s"></span><span style="animation-delay:1.4s"></span>
+        </div>
+        <p class="body">Skeletons and narrated status lines:
+          <span class="mono" style="color:var(--text-primary);font-size:13px">ANALYZING SESSION…</span></p>
+        <p class="micro" style="margin-top:14px">ONE GLOW, EARNED: RECORDING RING + HERO PULSE ONLY</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======== 07 FINALE ======== -->
+  <section style="padding:160px 0 120px">
+    <p class="overline">07 — <b>FINALE</b></p>
+    <h2 class="display-1" style="max-width:16ch">Human communication has no single <em class="serif">standard</em>.</h2>
+    <p class="body-lg" style="margin:28px 0 40px">InSign — technology should adapt to how you communicate.</p>
+    <div class="row">
+      <a class="btn btn-primary btn-lg" href="#main">Back to top <span class="arrow">→</span></a>
+      <span class="badge badge-demo">STATIC PREVIEW — CLAUDE BUILDS THE REAL APP FROM docs/07</span>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<footer style="border-top:1px solid var(--hairline);padding:40px 0">
+  <div class="wrap row" style="justify-content:space-between">
+    <div class="logo"><span class="dot"></span>InSign</div>
+    <p class="micro">24H HACKATHON · DESIGN DOCS 01–07 IN /docs</p>
+  </div>
+</footer>
+
+<script>
+  /* color token swatches — docs/02 §1 */
+  const TOKENS = [
+    ["ink-1000", "CANVAS", "#0A0A0B"],
+    ["surface-1", "CARDS", "#111113"],
+    ["surface-2", "INPUTS", "#17171A"],
+    ["surface-3", "HOVER", "#1E1E22"],
+    ["hairline", "BORDERS", "rgba(255,255,255,0.08)"],
+    ["text-primary", "WARM WHITE", "#F5F4F1"],
+    ["text-secondary", "BODY", "#A3A3AB"],
+    ["text-tertiary", "CAPTIONS", "#6E6E76"],
+    ["accent", "SIGNAL AMBER", "#E8A33D"],
+    ["accent-dim", "TINT ≤14%", "rgba(232,163,61,0.14)"],
+    ["state-recording", "RECORDING", "#E5484D"],
+    ["state-success", "TRACKING OK", "#5FBF7A"]
+  ];
+  const grid = document.getElementById('swatches');
+  TOKENS.forEach(([name, role, val]) => {
+    const solid = name === 'accent-dim' ? '#E8A33D'
+                : val.startsWith('rgba') ? '#3A3A40' : val;
+    const chipStyle = name === 'accent-dim'
+      ? 'background:linear-gradient(rgba(232,163,61,0.14),rgba(232,163,61,0.14)),#0A0A0B;'
+      : 'background:' + solid + ';';
+    const el = document.createElement('div');
+    el.className = 'swatch';
+    el.innerHTML =
+      '<div class="chip" style="' + chipStyle + '"></div>' +
+      '<div class="sw-body"><p class="sw-name">' + name + '</p>' +
+      '<p class="sw-val">' + role + ' · ' + val + '</p></div>';
+    grid.appendChild(el);
+  });
+
+  /* meters fill when scrolled into view; static width under reduced motion */
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fills = document.querySelectorAll('.meter-fill[data-w]');
+  if (reduced) {
+    fills.forEach(f => f.style.width = f.dataset.w);
+  } else {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.style.width = e.target.dataset.w; io.unobserve(e.target); }
+      });
+    }, { threshold: 0.4 });
+    fills.forEach(f => io.observe(f));
+    /* fallback: never leave meters empty if IntersectionObserver does not fire
+       (e.g. background webview); scroll reveal still works when it does */
+    setTimeout(() => {
+      fills.forEach(f => {
+        if (!f.style.width) { f.style.width = f.dataset.w; io.unobserve(f); }
+      });
+    }, 3000);
+  }
+</script>
+</body>
+</html>
