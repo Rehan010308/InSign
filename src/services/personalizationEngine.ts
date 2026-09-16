@@ -13,6 +13,12 @@ import { SCENARIO_LABELS } from '../types';
 export const MIN_SESSIONS_PER_SCENARIO = 3;
 export const RECENCY_WINDOW_DAYS = 14;
 export const PAUSE_RATIO_THRESHOLD = 1.3;
+/**
+ * "Trending flat or up" with a tolerance: with only three sessions each half of
+ * the trend is a single session, so a one-pause dip must not cancel a pattern
+ * that is otherwise clear.
+ */
+export const TREND_TOLERANCE = 0.85;
 export const PACE_DECLINE_THRESHOLD = 0.1;
 export const REPETITION_RATIO_THRESHOLD = 2;
 export const FILLER_RATIO_THRESHOLD = 2;
@@ -110,11 +116,16 @@ export function detectPattern(
     /* --- longer pauses ------------------------------------------------- */
     const pauses = list.map(s => s.pause_count);
     const medianPauses = median(pauses);
-    const crossMedian = median(recent.map(s => s.pause_count));
+    // Compare against the OTHER scenarios, not against everything: when most of
+    // the recent sessions are this scenario, including them in the baseline
+    // would hide the very pattern we are looking for.
+    const crossMedian = others.length
+      ? median(others.map(s => s.pause_count))
+      : median(recent.map(s => s.pause_count));
     if (crossMedian > 0 && medianPauses >= crossMedian * PAUSE_RATIO_THRESHOLD) {
       const firstHalf = median(pauses.slice(0, Math.floor(n / 2)));
       const lastHalf = median(pauses.slice(Math.ceil(n / 2)));
-      const trendingFlatOrUp = lastHalf >= firstHalf * 0.95;
+      const trendingFlatOrUp = lastHalf >= firstHalf * TREND_TOLERANCE;
       if (trendingFlatOrUp) {
         const ratio = medianPauses / crossMedian;
         const avg = Math.round(pauses.reduce((a, b) => a + b, 0) / n);
